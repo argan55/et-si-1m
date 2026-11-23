@@ -63,10 +63,10 @@
        {"label": "Se reconvertir", "effects": {"income_mult": 0.5, "salary_mult": 1.05, "count": {"aventure": 1}}},
        {"label": "Rester dans son poste", "effects": {"count": {"aventure": -1}}}
      ]},
-    {"id": "offre_rachat", "family": "travail", "weight": 2, "requires": ["business"],
-     "text": "Un concurrent propose de racheter votre entreprise pour trois fois ce que vous y avez mis.",
+    {"id": "offre_rachat", "family": "travail", "weight": 1.5, "requires": ["business_mature"],
+     "text": "Un concurrent propose de racheter votre entreprise pour deux fois ce qu'elle vaut aujourd'hui.",
      "choices": [
-       {"label": "Vendre", "effects": {"buyout": 3}},
+       {"label": "Vendre", "effects": {"buyout": 2}},
        {"label": "Garder l'entreprise", "effects": {"count": {"aventure": 1}}}
      ]},
     {"id": "gros_client", "family": "travail", "weight": 1.5, "requires": ["business"],

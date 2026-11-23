@@ -59,6 +59,5 @@ Je n'ai pas trouvé de source précise pour ces valeurs. Elles sont marquées «
 | `trip_big_usd` | tous sauf CA | Donnée canadienne appliquée aux autres pays en dollars US |
 
 Autres limites connues :
-- le taux hypothécaire canadien est le **taux affiché**, qui surestime le taux réellement négocié ;
 - les revenus sont **bruts**, puisqu'il n'y a pas de fiscalité en V1 ;
 - le Gini de Hong Kong (0,539) porte sur le revenu des ménages avant impôts et transferts, contre un revenu disponible pour la plupart des autres pays : la dispersion des salaires y est sans doute surestimée.

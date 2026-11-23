@@ -229,7 +229,7 @@ def _act(s, a, c):
         if amt < usd(s, RULES["business_min_usd"]):
             raise ValueError(f"Il faut au moins {_money(usd(s, RULES['business_min_usd']), c)} pour se lancer.")
         _spend(s, amt)
-        s["business"] = {"value": amt, "invested": amt}
+        s["business"] = {"value": amt, "invested": amt, "years": 0}
         st["invested"] += amt
         st["aventure"] += 1
         s["log"].append(f"Création d'entreprise : {_money(amt, c)}")
@@ -257,6 +257,7 @@ def flags(s):
         "partner": s["partner"], "no_partner": not s["partner"], "children": s["children"] > 0,
         "home": bool(s["homes"]), "rental": any(h["use"] == "rental" for h in s["homes"]),
         "etf": s["etf"] > 0, "business": bool(s["business"]), "studied": s["studied"],
+        "business_mature": bool(s["business"]) and s["business"]["years"] >= RULES["buyout_min_years"],
         "gave": st["given"] > 0, "owed": st["given"] - st["refunded"] > 1, "has_debt": s["debt"] > 0,
         "abroad": st["abroad"] > 0, "angel": st["angel"] > 0, "cosigned": st["cosigned"] > 0,
     }
@@ -330,7 +331,7 @@ def apply_effects(s, eff, yr):
                 s["business"]["value"] *= v
         elif k == "buyout":
             if s["business"]:
-                price = s["business"]["invested"] * v
+                price = s["business"]["value"] * v
                 s["cash"] += price
                 s["log"].append(f"Entreprise vendue : {_money(price, c)}")
                 s["business"] = None
@@ -406,6 +407,7 @@ def _finances(s, yr, c):
     s["cash"] += flow
 
     if s["business"]:
+        s["business"]["years"] += 1
         fail = 1 - c["business_survival_5y"] ** (1 / 5)
         if _rng(s["seed"], _BUSINESS, s["year"]).random() < fail:
             s["log"].append("Votre entreprise fait faillite. Vous retrouvez un emploi salarié.")

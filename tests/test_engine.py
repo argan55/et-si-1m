@@ -116,14 +116,14 @@ def test_bricks_interact():
     s["debt"] = 10000.0
     step(s, [{"type": "repay", "target": "debt", "amount": 10000}], None)
     assert s["debt"] == 0
-    # entreprise : revenu = rendement du capital ; rachat à 3 fois la mise
+    # entreprise : revenu = rendement du capital ; rachat à 2 fois la valeur actuelle
     s = new_life(4, "CA")
     step(s, [{"type": "start_business", "amount": usd(s, 100000)}], None)
     if s["business"]:
         assert flags(s)["business"] and not flags(s)["working"]
-        cash = s["cash"]
-        apply_effects(s, {"buyout": 3}, {})
-        assert s["business"] is None and s["cash"] == pytest.approx(cash + 3 * usd(new_life(4, "CA"), 100000), rel=0.01)
+        cash, value = s["cash"], s["business"]["value"]
+        apply_effects(s, {"buyout": 2}, {})
+        assert s["business"] is None and s["cash"] == pytest.approx(cash + 2 * value)
     # don : comptabilisé
     s = new_life(5)
     step(s, [{"type": "give", "amount": 1000}], None)
@@ -205,7 +205,7 @@ def test_every_number_has_a_source():
 
 def test_every_event_effect_is_known():
     s = new_life(9, "CA")
-    s["business"] = {"value": 1.0, "invested": 1.0}
+    s["business"] = {"value": 1.0, "invested": 1.0, "years": 0}
     for e in EVENTS:
         for eff in [e.get("effects", {})] + [o["effects"] for o in e.get("choices", [])] + list(e.get("effects_by_country", {}).values()):
             apply_effects(json.loads(json.dumps(s)), eff, {"income_mult": 1, "rent_mult": 1, "inflation_add": 0,
