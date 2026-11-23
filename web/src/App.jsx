@@ -23,22 +23,63 @@ function newSeed() {
   return Math.floor(Math.random() * 2 ** 31)
 }
 
+// Sauvegarde de la partie en cours (graine + décisions) : un rechargement la reprend.
+const SAVE_KEY = 'jeu1m.partie'
+function loadSave() {
+  try {
+    return JSON.parse(localStorage.getItem(SAVE_KEY))
+  } catch {
+    return null
+  }
+}
+function writeSave(game) {
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify(game))
+  } catch {
+    /* navigation privée ou stockage bloqué : le jeu marche sans sauvegarde */
+  }
+}
+
+const urlSeed = Number(params.get('seed')) || null
+const saved = loadSave()
+// Un lien partagé vers une autre graine l'emporte sur la sauvegarde.
+const resume = saved && Number.isInteger(saved.seed) && Array.isArray(saved.turns) && (!urlSeed || saved.seed === urlSeed) ? saved : null
+
 export default function App() {
-  const [seed, setSeed] = useState(() => Number(params.get('seed')) || newSeed())
-  const country = params.get('pays') || null
-  const [turns, setTurns] = useState([])
+  const [seed, setSeed] = useState(() => resume?.seed ?? urlSeed ?? newSeed())
+  const [country] = useState(() => (resume ? resume.country : params.get('pays')) || null)
+  const [turns, setTurns] = useState(() => resume?.turns ?? [])
   const [view, setView] = useState(null)
-  const [started, setStarted] = useState(false)
+  const [started, setStarted] = useState(() => resume?.started ?? false)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
     history.replaceState(null, '', `?seed=${seed}${country ? `&pays=${country}` : ''}`)
+    setError('')
+    callPlay(seed, country, turns).then(setView, (e) => {
+      // sauvegarde illisible (données du jeu modifiées depuis) : on repart du début de cette vie
+      setError(`Partie sauvegardée impossible à reprendre (${e.message}). Elle recommence au début.`)
+      setTurns([])
+      setStarted(false)
+      callPlay(seed, country, []).then(setView, (e2) => setError(e2.message))
+    })
+  }, [seed]) // eslint-disable-line react-hooks/exhaustive-deps -- les décisions sont rejouées une fois au chargement
+
+  useEffect(() => writeSave({ seed, country, turns, started }), [seed, country, turns, started])
+
+  function newLife() {
     setTurns([])
     setStarted(false)
-    setError('')
+    setView(null)
+    setSeed(newSeed())
+  }
+
+  function replayLife() {
+    setTurns([])
+    setStarted(false)
     callPlay(seed, country, []).then(setView, (e) => setError(e.message))
-  }, [seed])
+  }
 
   // Joue une ou plusieurs années ; s'arrête dès qu'un choix est attendu.
   async function advance(first, years = 1) {
@@ -61,16 +102,16 @@ export default function App() {
   }
 
   if (!view) return <Shell>{error ? <p className="error">{error}</p> : <p>Tirage en cours…</p>}</Shell>
-  if (!started) return <Shell><Draw v={view} onStart={() => setStarted(true)} onReroll={() => setSeed(newSeed())} /></Shell>
+  if (!started) return <Shell><Draw v={view} onStart={() => setStarted(true)} onReroll={newLife} /></Shell>
   if (view.done)
     return (
       <Shell>
-        <Mirror v={view} onReplay={() => { setTurns([]); setStarted(false); callPlay(seed, country, []).then(setView) }} onNew={() => setSeed(newSeed())} seed={seed} />
+        <Mirror v={view} onReplay={replayLife} onNew={newLife} seed={seed} />
       </Shell>
     )
   return (
     <Shell>
-      <Year v={view} busy={busy} error={error} onPlay={advance} />
+      <Year v={view} busy={busy} error={error} onPlay={advance} onNew={newLife} />
     </Shell>
   )
 }
@@ -108,7 +149,7 @@ function Draw({ v, onStart, onReroll }) {
         En pouvoir d'achat local, cela équivaut à <strong>{money(v.cash / c.ppp, 'USD')}</strong> dépensés aux États-Unis.
       </p>
       <dl className="facts">
-        <dt>Salaire net</dt><dd>{money(v.salary, c.currency)} / an</dd>
+        <dt>Salaire</dt><dd>{money(v.salary, c.currency)} / an</dd>
         <dt>Famille</dt><dd>{fam}</dd>
         <dt>Dettes</dt><dd>{v.debt ? money(v.debt, c.currency) : 'aucune'}</dd>
         <dt>Espérance de vie</dt><dd>{c.life_expectancy.toString().replace('.', ',')} ans (mais personne ne connaît la sienne)</dd>
@@ -121,7 +162,19 @@ function Draw({ v, onStart, onReroll }) {
   )
 }
 
-function Year({ v, busy, error, onPlay }) {
+function situation(v) {
+  if (v.studying) return 'en études à l\'étranger'
+  if (v.business) return 'à son compte'
+  return v.retired ? 'à la retraite' : 'en activité'
+}
+
+function incomeLabel(v) {
+  if (v.studying) return 'Revenu (études)'
+  if (v.business) return 'Bénéfice de l\'entreprise'
+  return v.retired ? 'Pension' : 'Salaire'
+}
+
+function Year({ v, busy, error, onPlay, onNew }) {
   const c = v.country
   const [draft, setDraft] = useState([])
   const [choice, setChoice] = useState(null)
@@ -139,7 +192,7 @@ function Year({ v, busy, error, onPlay }) {
   return (
     <div className="grid">
       <section className="card status">
-        <p className="eyebrow">{v.age} ans · {c.name} · {v.working ? 'en activité' : 'à la retraite'}</p>
+        <p className="eyebrow">{v.age} ans · {c.name} · {situation(v)}</p>
         <div className="networth">
           <span className="label">Patrimoine net</span>
           <strong>{money(v.net_worth, c.currency)}</strong>
@@ -151,8 +204,9 @@ function Year({ v, busy, error, onPlay }) {
           <dt className="sub">dont fonds d'urgence</dt><dd className="sub">{money(Math.min(v.emergency_fund, Math.max(v.cash, 0)), c.currency)}</dd>
           <dt>ETF</dt><dd>{money(v.etf, c.currency)}</dd>
           <dt>Immobilier (net)</dt><dd>{money(v.homes.reduce((s, h) => s + h.value - h.mortgage, 0), c.currency)}</dd>
+          {v.business && <><dt>Entreprise</dt><dd>{money(v.business.value, c.currency)}</dd></>}
           <dt>Dettes</dt><dd>{money(v.debt, c.currency)}</dd>
-          <dt>{v.working ? 'Salaire' : 'Pension'}</dt><dd>{money(ly ? ly.income : v.salary, c.currency)} / an</dd>
+          <dt>{incomeLabel(v)}</dt><dd>{money(ly ? ly.income : v.salary, c.currency)} / an</dd>
           <dt>Dépenses de vie</dt><dd>{money(v.spending, c.currency)} / an</dd>
           <dt>Famille</dt><dd>{v.partner ? 'en couple' : 'seul·e'}{v.children ? ` · ${v.children} enfant(s)` : ''}</dd>
         </dl>
@@ -207,44 +261,65 @@ function Year({ v, busy, error, onPlay }) {
           <button className="primary" disabled={busy || needChoice} onClick={() => play(1)}>Année suivante</button>
           <button disabled={busy || needChoice} onClick={() => play(5)}>Avancer de 5 ans</button>
         </div>
+        <p className="muted small">
+          Partie sauvegardée dans ce navigateur.{' '}
+          <button className="link" onClick={onNew}>Abandonner et tirer une autre vie</button>
+        </p>
       </section>
     </div>
   )
 }
 
+// Saisie d'un montant avec raccourcis (en part de `base`) et un bouton « Ajouter ».
+function AmountPicker({ label, base, shortcuts = [0.25, 0.5, 1], full, allowNegative = false, onAdd, min = 0 }) {
+  const [amount, setAmount] = useState('')
+  const n = Number(amount)
+  const ok = Number.isFinite(n) && n !== 0 && (allowNegative || n > 0) && Math.abs(n) >= min
+  return (
+    <>
+      <div className="row">
+        {shortcuts.map((f) => (
+          <button key={f} onClick={() => setAmount(Math.floor(base * f))}>{Math.round(f * 100)} %</button>
+        ))}
+      </div>
+      <label>
+        {label}
+        <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
+      </label>
+      <button disabled={full || !ok} onClick={() => { onAdd(n); setAmount('') }}>Ajouter</button>
+    </>
+  )
+}
+
+const TABS = [
+  ['invest', 'Investir (ETF)'], ['home', 'Immobilier'], ['travel', 'Voyager'], ['debt', 'Dettes'],
+  ['study', 'Étudier'], ['business', 'Entreprendre'], ['give', 'Donner'],
+]
+
 function Actions({ v, add, full }) {
   const c = v.country
+  const p = v.prices
+  const cur = c.currency
   const [tab, setTab] = useState('invest')
-  const [amount, setAmount] = useState('')
   const [use, setUse] = useState('residence')
   const [size, setSize] = useState(1)
   const [down, setDown] = useState(0.2)
   const avail = Math.max(v.available, 0)
   const price = c.home_price * size
+  const canStudy = !v.studied && !v.business && !v.retired && v.age <= p.study_max_age
 
   return (
     <div className="actions">
       <div className="tabs" role="tablist">
-        {[['invest', 'Investir (ETF)'], ['home', 'Immobilier'], ['travel', 'Voyager']].map(([k, l]) => (
+        {TABS.map(([k, l]) => (
           <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'selected' : ''} onClick={() => setTab(k)}>{l}</button>
         ))}
       </div>
       {tab === 'invest' && (
         <div className="panel">
-          <div className="row">
-            {[0.25, 0.5, 1].map((f) => (
-              <button key={f} onClick={() => setAmount(Math.floor(avail * f))}>{f * 100} %</button>
-            ))}
-          </div>
-          <label>
-            Montant ({c.currency}, négatif pour vendre)
-            <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
-          </label>
-          <button disabled={full || !Number(amount)} onClick={() => {
-            const n = Number(amount)
-            add({ type: 'invest', amount: n }, `${n > 0 ? 'Investir' : 'Vendre'} ${money(Math.abs(n), c.currency)} en ETF`)
-            setAmount('')
-          }}>Ajouter</button>
+          <p className="muted">Un ETF d'actions de votre pays, dividendes réinvestis. Vous détenez {money(v.etf, cur)}.</p>
+          <AmountPicker label={`Montant (${cur}, négatif pour vendre)`} base={avail} full={full} allowNegative
+            onAdd={(n) => add({ type: 'invest', amount: n }, `${n > 0 ? 'Investir' : 'Vendre'} ${money(Math.abs(n), cur)} en ETF`)} />
         </div>
       )}
       {tab === 'home' && (
@@ -265,13 +340,13 @@ function Actions({ v, add, full }) {
               <option value={0.2}>20 % (hypothèque 80 %)</option><option value={0.5}>50 %</option><option value={1}>100 % comptant</option>
             </select>
           </label>
-          <p className="muted">Prix : {money(price, c.currency)} · à sortir maintenant (mise de fonds + frais) : {money(price * (down + c.buy_costs), c.currency)}</p>
-          <button disabled={full} onClick={() => add({ type: 'buy_home', use, size, down }, `Acheter (${use === 'residence' ? 'résidence' : 'locatif'}) ${money(price, c.currency)}`)}>Ajouter</button>
+          <p className="muted">Prix : {money(price, cur)} · à sortir maintenant (mise de fonds + frais) : {money(price * (down + c.buy_costs), cur)}</p>
+          <button disabled={full} onClick={() => add({ type: 'buy_home', use, size, down }, `Acheter (${use === 'residence' ? 'résidence' : 'locatif'}) ${money(price, cur)}`)}>Ajouter</button>
           {v.homes.length > 0 && (
             <ul className="homes">
               {v.homes.map((h, i) => (
                 <li key={i}>
-                  {h.use === 'residence' ? 'Résidence' : 'Locatif'} · valeur {money(h.value, c.currency)} · hypothèque {money(h.mortgage, c.currency)}
+                  {h.use === 'residence' ? 'Résidence' : 'Locatif'} · valeur {money(h.value, cur)} · hypothèque {money(h.mortgage, cur)}
                   <button disabled={full} onClick={() => add({ type: 'sell_home', index: i }, `Vendre le bien n° ${i + 1}`)}>Vendre</button>
                 </li>
               ))}
@@ -281,12 +356,84 @@ function Actions({ v, add, full }) {
       )}
       {tab === 'travel' && (
         <div className="panel row">
-          <button disabled={full} onClick={() => add({ type: 'travel', kind: 'small' }, `Petit voyage (${money(c.trip_small, c.currency)})`)}>
-            Une semaine dans la région · {money(c.trip_small, c.currency)}
+          <button disabled={full} onClick={() => add({ type: 'travel', kind: 'small' }, `Petit voyage (${money(p.trip_small, cur)})`)}>
+            Quelques jours pas trop loin · {money(p.trip_small, cur)}
           </button>
-          <button disabled={full} onClick={() => add({ type: 'travel', kind: 'big' }, `Grand voyage (${money(c.trip_big, c.currency)})`)}>
-            Un mois à l'étranger · {money(c.trip_big, c.currency)}
+          <button disabled={full} onClick={() => add({ type: 'travel', kind: 'big' }, `Grand voyage (${money(p.trip_big, cur)})`)}>
+            Deux semaines outre-mer · {money(p.trip_big, cur)}
           </button>
+        </div>
+      )}
+      {tab === 'debt' && (
+        <div className="panel">
+          {v.debt <= 0 && !v.homes.some((h) => h.mortgage > 0) && <p className="muted">Vous n'avez aucune dette.</p>}
+          {v.debt > 0 && (
+            <>
+              <p className="muted">Dette de consommation : {money(v.debt, cur)}. La rembourser fait disparaître ses mensualités.</p>
+              <div className="row">
+                <button disabled={full || v.debt > avail} onClick={() => add({ type: 'repay', target: 'debt', amount: v.debt }, `Rembourser toute la dette (${money(v.debt, cur)})`)}>
+                  Tout rembourser · {money(v.debt, cur)}
+                </button>
+              </div>
+            </>
+          )}
+          {v.homes.map((h, i) => h.mortgage > 0 && (
+            <div key={i} className="row">
+              <span className="muted">Hypothèque du bien n° {i + 1} : {money(h.mortgage, cur)}</span>
+              <button disabled={full} onClick={() => {
+                const amt = Math.floor(Math.min(h.mortgage, avail))
+                if (amt > 0) add({ type: 'repay', target: i, amount: amt }, `Rembourser ${money(amt, cur)} d'hypothèque`)
+              }}>Rembourser ce que je peux</button>
+            </div>
+          ))}
+        </div>
+      )}
+      {tab === 'study' && (
+        <div className="panel">
+          <p className="muted">
+            Une maîtrise à l'étranger : {money(p.study_year, cur)} de frais par an (payés en devises, ils suivent le change),
+            pas de salaire pendant les études, puis un salaire d'environ {Math.round(p.study_premium * 100)} % plus élevé. Une seule fois, jusqu'à {p.study_max_age} ans.
+          </p>
+          {canStudy ? (
+            <div className="row">
+              {[1, 2].map((y) => (
+                <button key={y} disabled={full} onClick={() => add({ type: 'study', years: y }, `Étudier ${y} an(s) à l'étranger (${money(p.study_year * y, cur)})`)}>
+                  {y} an{y > 1 ? 's' : ''} · {money(p.study_year * y, cur)}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="muted">{v.studied ? 'Vous avez déjà fait vos études à l\'étranger.' : 'Ce n\'est plus possible dans votre situation.'}</p>
+          )}
+        </div>
+      )}
+      {tab === 'business' && (
+        <div className="panel">
+          {v.business ? (
+            <>
+              <p className="muted">
+                Votre entreprise vaut {money(v.business.value, cur)} et vous verse environ {money(v.business.value * p.business_yield, cur)} par an.
+                Elle peut faire faillite ou recevoir une offre de rachat.
+              </p>
+              <button disabled={full} onClick={() => add({ type: 'sell_business' }, `Vendre l'entreprise (${money(v.business.value, cur)})`)}>Vendre l'entreprise</button>
+            </>
+          ) : (
+            <>
+              <p className="muted">
+                Vous quittez votre emploi pour vous lancer. Le bénéfice remplace votre salaire. Minimum {money(p.business_min, cur)}.
+                Beaucoup d'entreprises ne passent pas cinq ans.
+              </p>
+              <AmountPicker label={`Capital investi (${cur})`} base={avail} full={full} min={p.business_min}
+                onAdd={(n) => add({ type: 'start_business', amount: n }, `Créer une entreprise (${money(n, cur)})`)} />
+            </>
+          )}
+        </div>
+      )}
+      {tab === 'give' && (
+        <div className="panel">
+          <p className="muted">À une cause, à des proches. Vous avez donné {money(v.given ?? 0, cur)} jusqu'ici.</p>
+          <AmountPicker label={`Montant (${cur})`} base={avail} shortcuts={[0.01, 0.05, 0.1]} full={full}
+            onAdd={(n) => add({ type: 'give', amount: n }, `Donner ${money(n, cur)}`)} />
         </div>
       )}
     </div>

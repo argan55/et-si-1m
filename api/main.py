@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 
 from engine import mirror, replay
 from engine.data import COUNTRIES, EVENT_BY_ID, RULES
-from engine.game import available, emergency_fund, net_worth, spending, working
+from engine.game import available, emergency_fund, net_worth, retired, spending, usd, working
 
 app = FastAPI(title="1 M$, une vie")
 
@@ -32,9 +32,16 @@ def view(s):
     last = s["history"][-1] if s["history"] else None
     return {
         "country": {"code": s["country"], "name": c["name"], "currency": c["currency"],
-                    "ppp": c["ppp_per_intl_usd"], "fx": c["fx_per_usd"],
-                    "trip_small": c["trip_small"], "trip_big": c["trip_big"], "home_price": c["home_price"], "buy_costs": c["buy_costs"],
-                    "life_expectancy": c["life_expectancy"]},
+                    "ppp": c["ppp_per_intl_usd"], "fx": c["fx_per_usd"], "life_expectancy": c["life_expectancy"],
+                    "home_price": c["home_price"], "buy_costs": c["buy_costs"]},
+        # prix du moment, en monnaie locale (ce qui se paie en dollars suit le change)
+        "prices": {"trip_small": c["trip_small"], "trip_big": usd(s, RULES["trip_big_usd"]),
+                   "study_year": usd(s, RULES["study_tuition_usd"]), "business_min": usd(s, RULES["business_min_usd"]),
+                   "study_premium": RULES["study_premium"], "study_max_age": RULES["study_max_age"],
+                   "business_yield": RULES["business_yield"]},
+        "given": s["stats"]["given"],
+        "fx_index": s["fx"],
+        "business": s["business"], "studying": s["studying"], "studied": s["studied"], "retired": retired(s),
         "origin": RULES["origins"][s["origin"]]["label"],
         "prize_usd": RULES["prize_usd"],
         "age": s["age"], "start_age": s["start_age"], "done": s["done"],

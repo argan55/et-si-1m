@@ -1,23 +1,33 @@
 """Une vie, année par année.
 
 Tous les montants sont en monnaie locale et en termes réels (prix de l'année de départ).
+Chaque année de jeu rejoue une année historique du pays : bourse locale, inflation, taux,
+change et immobilier ensemble (data/market_history.csv).
 Déterministe : tout l'aléa vient de (seed, flux, année), donc les décisions du joueur
 ne décalent jamais les tirages des années suivantes.
 """
 import copy
 import math
+from statistics import NormalDist
 
 import numpy as np
 
-from .data import COUNTRIES, EVENT_BY_ID, EVENTS, RETURNS, RULES
+from .data import COUNTRIES, EVENT_BY_ID, EVENTS, MARKET, RULES
 
-_BY_RETURN = sorted(range(len(RETURNS)), key=lambda i: RETURNS[i]["stocks"])
 # flux d'aléa indépendants
-_LIFE, _EVENT, _INFL, _MARKET, _HOMES = range(5)
+_LIFE, _EVENT, _MARKET, _BUSINESS = range(4)
+COUNTERS = {"aventure", "abroad", "angel", "cosigned", "autres"}
+_FLOORED = {"angel", "cosigned", "abroad"}  # compteurs d'état, jamais négatifs
+_BY_RETURN = {code: sorted(rows, key=lambda r: r["stocks_real"]) for code, rows in MARKET.items()}
 
 
 def _rng(seed, stream, year=0):
     return np.random.default_rng([seed, stream, year])
+
+
+def salary_sigma(c):
+    """Dispersion log-normale des salaires déduite du coefficient de Gini du pays."""
+    return math.sqrt(2) * NormalDist().inv_cdf((c["gini"] + 1) / 2)
 
 
 def new_life(seed, country=None):
@@ -32,30 +42,53 @@ def new_life(seed, country=None):
     age = int(rng.integers(o["age_min"], o["age_max"] + 1))
     death = round(rng.normal(c["life_expectancy"], RULES["life_sd"]))
     death = int(min(max(death, age + RULES["min_years"]), RULES["max_age"]))
-    salary = float(c["salary_median_net"] * math.exp(rng.normal(0, c["salary_sigma"])) * o["salary_mult"])
+    salary = float(c["salary_median"] * math.exp(rng.normal(0, salary_sigma(c))) * o["salary_mult"])
     partner = bool(rng.random() < c["partner_prob"])
-    kids = int(rng.choice(len(c["children_weights"]), p=c["children_weights"]))
+    span = RULES["children_full_age"] - RULES["children_from_age"]
+    kids = int(rng.poisson(c["fertility"] * min(max((age - RULES["children_from_age"]) / span, 0), 1)))
     has_debt = rng.random() < c["debt_prob"]
     debt = float(salary * c["debt_to_salary"] * rng.lognormal(0, RULES["debt_sigma"])) if has_debt else 0.0
     return {
         "seed": seed, "country": code, "origin": origin,
         "start_age": age, "age": age, "death_age": death, "year": 0,
-        "salary": salary, "lifestyle": salary, "partner": partner, "children": kids if age >= 25 else 0,
+        "salary": salary, "lifestyle": salary, "partner": partner, "children": kids,
         "cash": RULES["prize_usd"] * c["fx_per_usd"], "etf": 0.0, "homes": [],
         "debt": debt, "debt_years": RULES["debt_years"],
+        "fx": 1.0,  # indice réel du dollar US en monnaie locale (1 = au départ)
+        "business": None, "studying": 0, "studied": False,
         "pending": None, "done": False, "log": [],
-        "stats": {"travel_spent": 0.0, "trips": 0, "given": 0.0, "invested": 0.0, "aventure": 0, "abroad": 0},
+        "stats": {"travel_spent": 0.0, "experience": 0.0, "trips": 0, "given": 0.0, "refunded": 0.0, "gifts": 0,
+                  "invested": 0.0, "repaid": 0.0, **{k: 0 for k in COUNTERS}},
         "history": [],
     }
 
 
+def usd(s, amount):
+    """Coût local, au change réel du moment, d'une dépense fixée en dollars US."""
+    return amount * COUNTRIES[s["country"]]["fx_per_usd"] * s["fx"]
+
+
+def retired(s):
+    return s["age"] >= COUNTRIES[s["country"]]["retirement_age"]
+
+
 def working(s):
-    return s["age"] < COUNTRIES[s["country"]]["retirement_age"]
+    return not retired(s) and not s["business"] and not s["studying"]
+
+
+def income(s):
+    c = COUNTRIES[s["country"]]
+    if s["studying"]:
+        return 0.0
+    if s["business"]:
+        return s["business"]["value"] * RULES["business_yield"]
+    return s["salary"] if not retired(s) else c["pension_ratio"] * s["lifestyle"]
 
 
 def spending(s):
     c = COUNTRIES[s["country"]]
-    eq = (1 + RULES["child_equiv"] * s["children"]) * (RULES["partner_equiv"] if s["partner"] else 1)
+    kids = s["children"] if s["age"] < RULES["children_leave_age"] else 0  # les enfants finissent par partir
+    eq = (1 + RULES["child_equiv"] * kids) * (RULES["partner_equiv"] if s["partner"] else 1)
     x = c["spend_ratio"] * s["lifestyle"] * eq
     if any(h["use"] == "residence" for h in s["homes"]):
         x *= 1 - c["rent_share"]
@@ -71,11 +104,19 @@ def available(s):
 
 
 def net_worth(s):
-    return s["cash"] + s["etf"] + sum(h["value"] - h["mortgage"] for h in s["homes"]) - s["debt"]
+    return (s["cash"] + s["etf"] + sum(h["value"] - h["mortgage"] for h in s["homes"])
+            + (s["business"]["value"] if s["business"] else 0) - s["debt"])
 
 
 def _money(x, c):
-    return f"{x:,.0f} {c['currency']}".replace(",", " ")
+    return f"{x:,.0f} {c['currency']}".replace(",", " ")
+
+
+def _amount(a):
+    amt = float(a["amount"])
+    if not math.isfinite(amt) or amt <= 0:
+        raise ValueError("Montant invalide.")
+    return amt
 
 
 def _need(s, amount):
@@ -83,15 +124,21 @@ def _need(s, amount):
         raise ValueError("Pas assez de liquidités disponibles (le fonds d'urgence est réservé).")
 
 
+def _spend(s, amount):
+    _need(s, amount)
+    s["cash"] -= amount
+
+
 def _act(s, a, c):
     t = a.get("type")
+    st = s["stats"]
     if t == "invest":
         amt = float(a["amount"])
         if not math.isfinite(amt) or amt == 0:
             raise ValueError("Montant invalide.")
         if amt > 0:
             _need(s, amt)
-            s["stats"]["invested"] += amt
+            st["invested"] += amt
         elif -amt > s["etf"] + 1e-6:
             raise ValueError("Vous ne détenez pas autant de parts d'ETF.")
         s["cash"] -= amt
@@ -107,10 +154,9 @@ def _act(s, a, c):
         if not (0.5 <= size <= 2) or not (RULES["min_down"] <= down <= 1):
             raise ValueError("Taille ou mise de fonds invalide.")
         price = c["home_price"] * size
-        _need(s, price * (down + c["buy_costs"]))
-        s["cash"] -= price * (down + c["buy_costs"])
+        _spend(s, price * (down + c["buy_costs"]))
         s["homes"].append({"use": use, "value": price, "mortgage": price * (1 - down), "years_left": c["mortgage_years"]})
-        s["stats"]["invested"] += price * down
+        st["invested"] += price * down
         s["log"].append(f"Achat d'un bien ({'résidence' if use == 'residence' else 'locatif'}) : {_money(price, c)}")
     elif t == "sell_home":
         h = s["homes"][int(a["index"])]
@@ -120,38 +166,99 @@ def _act(s, a, c):
     elif t == "travel":
         if a["kind"] not in ("small", "big"):
             raise ValueError("Type de voyage inconnu.")
-        cost = c["trip_" + a["kind"]]
-        _need(s, cost)
-        s["cash"] -= cost
-        s["stats"]["trips"] += 1
-        s["stats"]["travel_spent"] += cost
+        cost = c["trip_small"] if a["kind"] == "small" else usd(s, RULES["trip_big_usd"])
+        _spend(s, cost)
+        st["trips"] += 1
+        st["travel_spent"] += cost
         s["log"].append(f"Voyage : {_money(cost, c)}")
+    elif t == "repay":
+        amt = _amount(a)
+        if a["target"] == "debt":
+            if amt > s["debt"] + 1e-6:
+                raise ValueError("C'est plus que votre dette.")
+            s["debt"] -= amt
+        else:
+            h = s["homes"][int(a["target"])]
+            if amt > h["mortgage"] + 1e-6:
+                raise ValueError("C'est plus que le solde de l'hypothèque.")
+            h["mortgage"] -= amt
+        _spend(s, amt)
+        st["repaid"] += amt
+        s["log"].append(f"Remboursement anticipé : {_money(amt, c)}")
+    elif t == "study":
+        years = int(a["years"])
+        if years not in (1, 2):
+            raise ValueError("Durée d'études invalide.")
+        if s["studied"] or s["business"] or retired(s) or s["age"] > RULES["study_max_age"]:
+            raise ValueError("Les études à l'étranger ne sont plus possibles dans votre situation.")
+        cost = usd(s, RULES["study_tuition_usd"]) * years
+        _spend(s, cost)
+        s["studying"], s["studied"] = years, True
+        st["abroad"] += 1
+        s["log"].append(f"Départ pour {years} an(s) d'études à l'étranger : {_money(cost, c)}")
+    elif t == "start_business":
+        amt = _amount(a)
+        if s["business"] or s["studying"]:
+            raise ValueError("Impossible de lancer une entreprise maintenant.")
+        if amt < usd(s, RULES["business_min_usd"]):
+            raise ValueError(f"Il faut au moins {_money(usd(s, RULES['business_min_usd']), c)} pour se lancer.")
+        _spend(s, amt)
+        s["business"] = {"value": amt, "invested": amt}
+        st["invested"] += amt
+        st["aventure"] += 1
+        s["log"].append(f"Création d'entreprise : {_money(amt, c)}")
+    elif t == "sell_business":
+        if not s["business"]:
+            raise ValueError("Vous n'avez pas d'entreprise.")
+        s["cash"] += s["business"]["value"]
+        s["log"].append(f"Vente de l'entreprise : {_money(s['business']['value'], c)}")
+        s["business"] = None
+    elif t == "give":
+        amt = _amount(a)
+        _spend(s, amt)
+        st["given"] += amt
+        st["gifts"] += 1
+        st["autres"] += 1
+        s["log"].append(f"Don : {_money(amt, c)}")
     else:
         raise ValueError(f"Action inconnue : {t}")
 
 
-def _eligible(s, e):
-    flags = {
-        "working": working(s), "retired": not working(s),
-        "partner": s["partner"], "no_partner": not s["partner"],
+def flags(s):
+    st = s["stats"]
+    return {
+        "working": working(s), "retired": retired(s),
+        "partner": s["partner"], "no_partner": not s["partner"], "children": s["children"] > 0,
         "home": bool(s["homes"]), "rental": any(h["use"] == "rental" for h in s["homes"]),
-        "etf": s["etf"] > 0,
+        "etf": s["etf"] > 0, "business": bool(s["business"]), "studied": s["studied"],
+        "gave": st["given"] > 0, "owed": st["given"] - st["refunded"] > 1, "has_debt": s["debt"] > 0,
+        "abroad": st["abroad"] > 0, "angel": st["angel"] > 0, "cosigned": st["cosigned"] > 0,
     }
-    return all(flags[r] for r in e.get("requires", [])) and e.get("age_min", 0) <= s["age"] <= e.get("age_max", 999)
+
+
+def _weight(s, e, f):
+    if not all(f[r] for r in e.get("requires", [])) or any(f[r] for r in e.get("excludes", [])):
+        return 0.0
+    if not e.get("age_min", 0) <= s["age"] <= e.get("age_max", 999):
+        return 0.0
+    w = e["weight"] * e.get("country_weight", {}).get(s["country"], 1)
+    for flag, mult in e.get("weight_if", {}).items():
+        w *= mult if f[flag] else 1
+    if e.get("age_factor"):
+        w *= max(RULES["age_factor_min"], s["age"] / RULES["age_factor_ref"])
+    return w
 
 
 def _draw_event(s):
-    cands = [e for e in EVENTS if _eligible(s, e)]
-    w = [
-        e["weight"] * e.get("country_weight", {}).get(s["country"], 1)
-        * (max(RULES["age_factor_min"], s["age"] / RULES["age_factor_ref"]) if e.get("age_factor") else 1)
-        for e in cands
-    ] + [RULES["no_event_weight"]]
+    f = flags(s)
+    w = [_weight(s, e, f) for e in EVENTS] + [RULES["no_event_weight"]]
     i = int(_rng(s["seed"], _EVENT, s["year"]).choice(len(w), p=np.array(w) / sum(w)))
-    return cands[i] if i < len(cands) else None
+    return EVENTS[i] if i < len(EVENTS) else None
 
 
 def apply_effects(s, eff, yr):
+    c = COUNTRIES[s["country"]]
+    st = s["stats"]
     ref = s["salary"] if working(s) else s["lifestyle"]
     for k, v in eff.items():
         if k == "salary_mult":
@@ -160,6 +267,10 @@ def apply_effects(s, eff, yr):
             yr[k] *= v
         elif k in ("inflation_add", "rate_add"):
             yr[k] += v
+        elif k == "fx_shock":
+            yr["fx_add"] += v
+        elif k == "home_shock":
+            yr["home_add"] += v
         elif k == "market":
             yr["market"] = v
         elif k == "cash_salary":
@@ -175,9 +286,33 @@ def apply_effects(s, eff, yr):
             s["children"] += v
         elif k == "give_salary":
             s["cash"] -= v * ref
-            s["stats"]["given"] += v * ref
-        elif k in ("aventure", "abroad"):
-            s["stats"][k] += v
+            st["given"] += v * ref
+        elif k == "refund_given":
+            # on ne récupère jamais plus que ce qu'on a donné et pas encore récupéré
+            amt = min(v * ref, st["given"] - st["refunded"])
+            s["cash"] += amt
+            st["refunded"] += amt
+        elif k in ("experience_salary", "experience_usd"):
+            amt = v * ref if k == "experience_salary" else usd(s, v)
+            s["cash"] -= amt
+            st["experience"] += amt
+        elif k == "debt_salary":
+            s["debt"] += v * ref
+            s["debt_years"] = RULES["debt_years"]
+        elif k == "business_mult":
+            if s["business"]:
+                s["business"]["value"] *= v
+        elif k == "buyout":
+            if s["business"]:
+                price = s["business"]["invested"] * v
+                s["cash"] += price
+                s["log"].append(f"Entreprise vendue : {_money(price, c)}")
+                s["business"] = None
+        elif k == "count":
+            for name, n in v.items():
+                if name not in COUNTERS:
+                    raise KeyError(f"compteur inconnu : {name}")
+                st[name] = max(0, st[name] + n) if name in _FLOORED else st[name] + n
         else:
             raise KeyError(f"effet inconnu : {k}")
 
@@ -210,17 +345,19 @@ def _cover_shortfall(s, c):
         s["log"].append("Vous avez dû vous endetter.")
 
 
-def _finances(s, yr, c):
-    seed, y = s["seed"], s["year"]
-    infl = float(_rng(seed, _INFL, y).normal(c["inflation_mean"], c["inflation_sd"])) + yr["inflation_add"]
+def _market_year(s, yr):
+    rows = _BY_RETURN[s["country"]]
     n = RULES["extreme_years"]
-    pool = {"worst": _BY_RETURN[:n], "best": _BY_RETURN[-n:]}.get(yr["market"], _BY_RETURN)
-    market = RETURNS[pool[int(_rng(seed, _MARKET, y).integers(len(pool)))]]
+    pool = {"worst": rows[:n], "best": rows[-n:]}.get(yr["market"], rows)
+    return pool[int(_rng(s["seed"], _MARKET, s["year"]).integers(len(pool)))]
 
-    income = (s["salary"] if working(s) else c["pension_ratio"] * s["lifestyle"]) * yr["income_mult"]
+
+def _finances(s, yr, c):
+    m = _market_year(s, yr)
+    infl = m["inflation"] + yr["inflation_add"]
+    inc = income(s) * yr["income_mult"]
     spend = spending(s)
-    flow = income - spend
-    hr = _rng(seed, _HOMES, y)
+    flow = inc - spend
     for h in s["homes"]:
         flow -= h["value"] * c["home_costs"]
         if h["use"] == "rental":
@@ -229,21 +366,36 @@ def _finances(s, yr, c):
             pay, h["mortgage"] = _amortize(h["mortgage"], c["mortgage_rate"] + yr["rate_add"], h["years_left"], infl)
             h["years_left"] = max(1, h["years_left"] - 1)
             flow -= pay
-        h["value"] *= 1 + float(hr.normal(c["home_growth_mean"], c["home_growth_sd"]))
+        h["value"] *= 1 + m["home_real"] + yr["home_add"]
     if s["debt"] > 0:
         pay, s["debt"] = _amortize(s["debt"], c["debt_rate"], s["debt_years"], infl)
         s["debt_years"] = max(1, s["debt_years"] - 1)
         flow -= pay
 
     if s["cash"] > 0:
-        s["cash"] *= (1 + c["cash_rate"] + yr["rate_add"]) / (1 + infl)
-    s["etf"] *= 1 + market["stocks"]
+        # rendement réel historique de l'épargne, corrigé des chocs de taux et d'inflation de l'année
+        s["cash"] *= (1 + m["cash_real"] + yr["rate_add"]) * (1 + m["inflation"]) / (1 + infl)
+    s["etf"] *= 1 + m["stocks_real"]
+    s["fx"] *= 1 + m["fx_real"] + yr["fx_add"]
     s["cash"] += flow
+
+    if s["business"]:
+        fail = 1 - c["business_survival_5y"] ** (1 / 5)
+        if _rng(s["seed"], _BUSINESS, s["year"]).random() < fail:
+            s["log"].append("Votre entreprise fait faillite. Vous retrouvez un emploi salarié.")
+            s["business"] = None
+            s["salary"] *= RULES["business_fail_salary_mult"]
+    if s["studying"]:
+        s["studying"] -= 1
+        if not s["studying"]:
+            s["salary"] *= 1 + RULES["study_premium"]
+            s["log"].append("Diplôme en poche : votre salaire augmente.")
     _cover_shortfall(s, c)
     if working(s):
         s["salary"] *= 1 + c["salary_growth_real"]
         s["lifestyle"] = s["salary"]
-    return {"inflation": infl, "market_year": market["year"], "market_return": market["stocks"], "income": income, "spend": spend}
+    return {"inflation": infl, "market_year": m["year"], "market_return": m["stocks_real"],
+            "income": inc, "spend": spend}
 
 
 def step(s, actions=(), choice=None):
@@ -261,7 +413,8 @@ def _step(s, actions, choice):
     if s["done"]:
         raise ValueError("Cette vie est terminée.")
     c = COUNTRIES[s["country"]]
-    yr = {"income_mult": 1.0, "rent_mult": 1.0, "inflation_add": 0.0, "rate_add": 0.0, "market": None}
+    yr = {"income_mult": 1.0, "rent_mult": 1.0, "inflation_add": 0.0, "rate_add": 0.0,
+          "fx_add": 0.0, "home_add": 0.0, "market": None}
     s["log"] = []
     if s["pending"]:
         opts = EVENT_BY_ID[s["pending"]]["choices"]
@@ -286,11 +439,12 @@ def _step(s, actions, choice):
     fin = _finances(s, yr, c)
     nw = net_worth(s)
     rentals = sum(h["value"] - h["mortgage"] for h in s["homes"] if h["use"] == "rental")
+    biz = s["business"]["value"] if s["business"] else 0.0
     s["history"].append({
         "age": s["age"], "net_worth": nw, "net_worth_ppp": nw / c["ppp_per_intl_usd"],
         "cash": s["cash"], "etf": s["etf"], "property": sum(h["value"] - h["mortgage"] for h in s["homes"]),
-        "debt": s["debt"], "risky": s["etf"] + rentals, "event": ev["id"] if ev else None,
-        "log": s["log"], **fin,
+        "business": biz, "debt": s["debt"], "risky": s["etf"] + rentals + biz,
+        "event": ev["id"] if ev else None, "log": s["log"], **fin,
     })
     s["age"] += 1
     s["year"] += 1

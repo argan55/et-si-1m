@@ -15,5 +15,10 @@ RULES = _json("rules.json")["rules"]
 EVENTS = _json("events.json")["events"]
 EVENT_BY_ID = {e["id"]: e for e in EVENTS}
 
-with open(DATA / "returns.csv", newline="") as f:
-    RETURNS = [{"year": int(r["year"]), "stocks": float(r["stocks_real"])} for r in csv.DictReader(f)]
+# Historique annuel par pays : une année tirée rejoue ensemble bourse, inflation, taux, change et immobilier.
+MARKET = {}
+with open(DATA / "market_history.csv", newline="") as f:
+    for r in csv.DictReader(f):
+        MARKET.setdefault(r["country"], []).append(
+            {k: (int(v) if k == "year" else v if k == "country" else float(v)) for k, v in r.items()}
+        )

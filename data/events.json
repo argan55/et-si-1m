@@ -1,8 +1,8 @@
 {
-  "_note": "Poids relatifs (règle de jeu). requires : working, retired, partner, no_partner, home, rental, etf. age_factor : le poids croît avec l'âge (âge/50). Effets : voir engine/game.py::apply_effects.",
+  "_note": "Poids relatifs. requires / excludes : drapeaux de l'état (voir engine/game.py::flags). weight_if : multiplicateur si le drapeau est vrai. age_factor : poids × âge/50. Effets : voir engine/game.py::apply_effects.",
   "sources": {
     "weight": "Règle de jeu : fréquences relatives choisies pour rythmer la partie, pas des probabilités statistiques",
-    "effects": "Règle de jeu ; les krachs et années record rejouent des années réelles (data/returns.csv)"
+    "effects": "Règle de jeu ; krachs et années record rejouent des années réelles de l'historique du pays (data/market_history.csv)"
   },
   "events": [
     {"id": "krach", "family": "marches", "weight": 0.5,
@@ -11,25 +11,70 @@
     {"id": "record", "family": "marches", "weight": 0.5,
      "text": "Année record : la bourse s'envole.",
      "effects": {"market": "best"}},
-    {"id": "inflation", "family": "marches", "weight": 0.5, "country_weight": {"BR": 2.5},
+    {"id": "inflation", "family": "marches", "weight": 0.4, "country_weight": {"BR": 2},
      "text": "Poussée d'inflation : les prix grimpent, l'épargne en liquide fond.",
-     "effects": {"inflation_add": 0.06}},
-    {"id": "taux", "family": "marches", "weight": 0.5, "country_weight": {"BR": 2},
-     "text": "La banque centrale relève fortement ses taux.",
+     "effects": {"inflation_add": 0.05}},
+    {"id": "taux_hausse", "family": "marches", "weight": 0.4, "country_weight": {"BR": 1.5},
+     "text": "La banque centrale relève fortement ses taux : l'épargne rapporte plus, les emprunts coûtent plus.",
      "effects": {"rate_add": 0.03}},
+    {"id": "taux_baisse", "family": "marches", "weight": 0.4,
+     "text": "La banque centrale baisse ses taux : crédit moins cher, épargne moins rémunérée.",
+     "effects": {"rate_add": -0.02}},
+    {"id": "devaluation", "family": "marches", "weight": 0.3, "country_weight": {"BR": 2.5},
+     "text": "Votre monnaie dégringole face au dollar : voyages et études à l'étranger coûtent bien plus cher.",
+     "effects": {"fx_shock": 0.25}},
+    {"id": "krach_immo", "family": "marches", "weight": 0.4, "requires": ["home"],
+     "text": "Le marché immobilier se retourne : vos biens perdent de la valeur.",
+     "effects": {"home_shock": -0.15}},
+    {"id": "boom_immo", "family": "marches", "weight": 0.4, "requires": ["home"],
+     "text": "Flambée de l'immobilier dans votre ville.",
+     "effects": {"home_shock": 0.12}},
+    {"id": "recession", "family": "marches", "weight": 0.4, "country_weight": {"BR": 1.5},
+     "text": "Récession : heures réduites, primes gelées, clients plus rares.",
+     "effects": {"income_mult": 0.9, "business_mult": 0.85}},
+    {"id": "hausse_loyers", "family": "marches", "weight": 0.6, "requires": ["rental"],
+     "text": "Les loyers grimpent dans votre ville : vos locataires paient plus cette année.",
+     "effects": {"rent_mult": 1.2}},
 
-    {"id": "promotion", "family": "travail", "weight": 1, "requires": ["working"], "age_max": 60,
+    {"id": "promotion", "family": "travail", "weight": 1, "requires": ["working"], "age_max": 60, "weight_if": {"studied": 1.5},
      "text": "Promotion ! Votre salaire augmente de 15 %.",
      "effects": {"salary_mult": 1.15}},
     {"id": "perte_emploi", "family": "travail", "weight": 0.7, "requires": ["working"], "country_weight": {"BR": 1.5},
      "text": "Vous perdez votre emploi. Il vous faut plusieurs mois pour en retrouver un, moins bien payé.",
      "effects": {"income_mult": 0.4, "salary_mult": 0.9}},
-    {"id": "offre_etranger", "family": "travail", "weight": 0.5, "requires": ["working"], "age_max": 55,
+    {"id": "offre_etranger", "family": "travail", "weight": 0.4, "requires": ["working"], "age_max": 55, "weight_if": {"studied": 2.5},
      "text": "On vous propose un poste à l'étranger, mieux payé, loin de vos proches.",
      "choices": [
-       {"label": "Accepter et partir", "effects": {"salary_mult": 1.3, "cash_salary": -0.2, "aventure": 1, "abroad": 1}},
-       {"label": "Refuser et rester", "effects": {"aventure": -1}}
+       {"label": "Accepter et partir", "effects": {"salary_mult": 1.3, "cash_salary": -0.2, "count": {"aventure": 1, "abroad": 1}}},
+       {"label": "Refuser et rester", "effects": {"count": {"aventure": -1}}}
      ]},
+    {"id": "epuisement", "family": "travail", "weight": 0.4, "requires": ["working"], "age_min": 28, "age_max": 62,
+     "text": "Épuisement professionnel : six mois d'arrêt.",
+     "effects": {"income_mult": 0.6}},
+    {"id": "prime", "family": "travail", "weight": 0.8, "requires": ["working"],
+     "text": "Belle année : vous touchez une prime.",
+     "effects": {"cash_salary": 0.2}},
+    {"id": "formation", "family": "travail", "weight": 0.5, "requires": ["working"], "age_max": 50,
+     "text": "Votre employeur vous paie une formation qui fait progresser votre salaire.",
+     "effects": {"salary_mult": 1.05}},
+    {"id": "reconversion", "family": "travail", "weight": 0.4, "requires": ["working"], "age_min": 30, "age_max": 55,
+     "text": "Envie de changer de métier : un an à mi-salaire pour un travail qui vous ressemble plus.",
+     "choices": [
+       {"label": "Se reconvertir", "effects": {"income_mult": 0.5, "salary_mult": 1.05, "count": {"aventure": 1}}},
+       {"label": "Rester dans son poste", "effects": {"count": {"aventure": -1}}}
+     ]},
+    {"id": "offre_rachat", "family": "travail", "weight": 2, "requires": ["business"],
+     "text": "Un concurrent propose de racheter votre entreprise pour trois fois ce que vous y avez mis.",
+     "choices": [
+       {"label": "Vendre", "effects": {"buyout": 3}},
+       {"label": "Garder l'entreprise", "effects": {"count": {"aventure": 1}}}
+     ]},
+    {"id": "gros_client", "family": "travail", "weight": 1.5, "requires": ["business"],
+     "text": "Votre entreprise décroche un gros client : elle vaut nettement plus.",
+     "effects": {"business_mult": 1.3}},
+    {"id": "associe_part", "family": "travail", "weight": 1, "requires": ["business"],
+     "text": "Votre associé claque la porte avec une partie de la clientèle.",
+     "effects": {"business_mult": 0.7}},
 
     {"id": "rencontre", "family": "perso", "weight": 1, "requires": ["no_partner"], "age_max": 75,
      "text": "Vous rencontrez quelqu'un. Vous emménagez ensemble et partagez les frais.",
@@ -37,15 +82,46 @@
     {"id": "enfant", "family": "perso", "weight": 2, "requires": ["partner"], "age_min": 20, "age_max": 45,
      "text": "Un enfant arrive dans la famille.",
      "effects": {"children_add": 1}},
-    {"id": "separation", "family": "perso", "weight": 0.4, "requires": ["partner"],
+    {"id": "separation", "family": "perso", "weight": 0.4, "requires": ["partner"], "weight_if": {"business": 1.3, "abroad": 1.3},
      "text": "Séparation. Le partage des biens liquides vous coûte cher.",
      "effects": {"partner": false, "liquid_pct": -0.25}},
     {"id": "sante", "family": "perso", "weight": 0.6, "age_factor": true,
      "text": "Un problème de santé vous oblige à payer des soins.",
      "effects": {"income_mult": 0.8, "cash_salary": -0.1},
      "effects_by_country": {"BR": {"income_mult": 0.8, "cash_salary": -0.5}}},
+    {"id": "accident", "family": "perso", "weight": 0.3,
+     "text": "Accident : plusieurs mois de convalescence.",
+     "effects": {"income_mult": 0.7, "cash_salary": -0.1},
+     "effects_by_country": {"BR": {"income_mult": 0.7, "cash_salary": -0.3}}},
+    {"id": "mariage", "family": "perso", "weight": 0.6, "requires": ["partner"], "age_max": 60,
+     "text": "Vous décidez de vous marier.",
+     "choices": [
+       {"label": "Grande fête avec tout le monde", "effects": {"experience_salary": 0.5}},
+       {"label": "Cérémonie simple", "effects": {}}
+     ]},
+    {"id": "enfant_etudes", "family": "perso", "weight": 1, "requires": ["children"], "age_min": 40, "age_max": 65,
+     "text": "Votre enfant entre à l'université.",
+     "choices": [
+       {"label": "Payer ses études", "effects": {"give_salary": 1}},
+       {"label": "Le laisser emprunter", "effects": {}}
+     ]},
+    {"id": "parent_dependant", "family": "perso", "weight": 0.6, "age_min": 45, "age_max": 70,
+     "text": "Un de vos parents perd son autonomie.",
+     "choices": [
+       {"label": "S'en occuper soi-même", "effects": {"income_mult": 0.8, "give_salary": 0.2}},
+       {"label": "Payer une résidence spécialisée", "effects": {"give_salary": 0.6}}
+     ]},
+    {"id": "tour_du_monde", "family": "perso", "weight": 0.4, "age_min": 25, "age_max": 70,
+     "text": "L'envie de tout lâcher six mois pour faire le tour du monde.",
+     "choices": [
+       {"label": "Partir", "effects": {"experience_usd": 15000, "income_mult": 0.5, "count": {"aventure": 1, "abroad": 1}}},
+       {"label": "Remettre à plus tard", "effects": {"count": {"aventure": -1}}}
+     ]},
+    {"id": "travaux", "family": "perso", "weight": 1.2, "requires": ["home"],
+     "text": "Toiture, plomberie : gros travaux imprévus sur vos biens.",
+     "effects": {"home_pct": -0.03}},
 
-    {"id": "proche_argent", "family": "entourage", "weight": 1,
+    {"id": "proche_argent", "family": "entourage", "weight": 1, "weight_if": {"gave": 2},
      "text": "Un proche traverse une passe difficile et vous demande de l'aide financière.",
      "choices": [
        {"label": "Donner l'équivalent d'un an de salaire", "effects": {"give_salary": 1}},
@@ -54,18 +130,56 @@
     {"id": "heritage", "family": "entourage", "weight": 0.4, "age_min": 40,
      "text": "Un oncle éloigné vous laisse un petit héritage.",
      "effects": {"cash_salary": 1}},
-    {"id": "arnaque", "family": "entourage", "weight": 0.6,
+    {"id": "arnaque", "family": "entourage", "weight": 0.6, "weight_if": {"gave": 1.5},
      "text": "Un ami vous propose un placement « garanti à 30 % par an ».",
      "choices": [
-       {"label": "Placer 10 % de votre épargne", "effects": {"liquid_pct": -0.1, "aventure": 1}},
-       {"label": "Décliner", "effects": {"aventure": -1}}
+       {"label": "Placer 10 % de votre épargne", "effects": {"liquid_pct": -0.1, "count": {"aventure": 1}}},
+       {"label": "Décliner", "effects": {"count": {"aventure": -1}}}
      ]},
-
-    {"id": "locataire_impaye", "family": "entourage", "weight": 1.5, "requires": ["rental"],
+    {"id": "locataire_impaye", "family": "entourage", "weight": 1.2, "requires": ["rental"],
      "text": "Votre locataire cesse de payer. Une année de loyers perdue.",
      "effects": {"rent_mult": 0}},
-    {"id": "travaux", "family": "perso", "weight": 1.2, "requires": ["home"],
-     "text": "Toiture, plomberie : gros travaux imprévus sur vos biens.",
-     "effects": {"home_pct": -0.03}}
+    {"id": "startup_ami", "family": "entourage", "weight": 0.5, "excludes": ["angel"],
+     "text": "Une amie lance une startup et cherche des premiers investisseurs.",
+     "choices": [
+       {"label": "Investir un an de salaire", "effects": {"cash_salary": -1, "count": {"angel": 1, "aventure": 1}}},
+       {"label": "Passer son tour", "effects": {}}
+     ]},
+    {"id": "startup_revendue", "family": "entourage", "weight": 0.6, "requires": ["angel"],
+     "text": "La startup de votre amie est rachetée : votre mise est multipliée par cinq.",
+     "effects": {"cash_salary": 5, "count": {"angel": -1}}},
+    {"id": "startup_coulee", "family": "entourage", "weight": 1.2, "requires": ["angel"],
+     "text": "La startup de votre amie ferme ses portes. Votre mise est perdue.",
+     "effects": {"count": {"angel": -1}}},
+    {"id": "caution", "family": "entourage", "weight": 0.5, "excludes": ["cosigned"],
+     "text": "Votre frère vous demande de vous porter caution pour son prêt.",
+     "choices": [
+       {"label": "Signer", "effects": {"count": {"cosigned": 1, "autres": 1}}},
+       {"label": "Refuser", "effects": {"count": {"autres": -1}}}
+     ]},
+    {"id": "caution_appelee", "family": "entourage", "weight": 0.8, "requires": ["cosigned"],
+     "text": "Votre frère ne rembourse plus : la banque se tourne vers vous.",
+     "effects": {"debt_salary": 1, "count": {"cosigned": -1}}},
+    {"id": "sollicitation", "family": "entourage", "weight": 0.5, "weight_if": {"gave": 3},
+     "text": "Une association que vous admirez vous sollicite pour un don.",
+     "choices": [
+       {"label": "Donner", "effects": {"give_salary": 0.2}},
+       {"label": "Pas cette fois", "effects": {}}
+     ]},
+    {"id": "rappel_pays", "family": "entourage", "weight": 1, "requires": ["abroad"],
+     "text": "Votre famille vous presse de revenir vivre près d'elle.",
+     "choices": [
+       {"label": "Rentrer", "effects": {"salary_mult": 0.85, "count": {"abroad": -1}}},
+       {"label": "Rester où vous êtes", "effects": {"count": {"autres": -1}}}
+     ]},
+    {"id": "remboursement", "family": "entourage", "weight": 0.5, "requires": ["owed"],
+     "text": "Un proche que vous aviez aidé vous rembourse une partie de la somme.",
+     "effects": {"refund_given": 0.3}},
+    {"id": "incendie", "family": "entourage", "weight": 0.3,
+     "text": "La maison de votre sœur brûle. Elle a tout perdu.",
+     "choices": [
+       {"label": "L'aider à repartir", "effects": {"give_salary": 0.5}},
+       {"label": "L'héberger quelque temps", "effects": {"cash_salary": -0.05}}
+     ]}
   ]
 }

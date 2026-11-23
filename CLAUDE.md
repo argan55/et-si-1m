@@ -84,3 +84,25 @@ _À mettre à jour à la fin de chaque étape._
     - un ETF unique (S&P 500 réel) pour les deux pays : on suppose que la PPA tient dans le temps ;
     - captures d'écran du README à faire.
   - Prochaine étape : étape 2 (7 briques, 40 événements).
+- 2026-11-23 : **étape 2 terminée (code)**, commits en attente.
+  - Git : dépôt initialisé. L'état V0 est indexé (`git add`) mais pas commité, car `user.name` et `user.email` ne sont pas configurés. Il faut commiter l'index tel quel (V0), puis `git add -A` pour l'étape 2.
+  - Marchés : un ETF local par pays.
+    - Fichier `data/market_history.csv`, construit par `tools/build_market_history.py`.
+    - Contenu : MSCI en monnaie locale dividendes compris, inflation, taux court, change réel et immobilier réel (BRI), fenêtre commune 2002-2025.
+    - Chaque année de jeu rejoue une année historique complète du pays (bootstrap conjoint).
+    - La série MSCI Brazil en BRL a une rupture d'échelle en 2011-2012, corrigée via USD × PTAX.
+  - Écart Canada/Brésil : il tient (tout en ETF, 100 vies : Canada ≈ 7,6 M$ PPA, Brésil ≈ 13,1 M$). Il vient presque entièrement du pouvoir d'achat de départ (1 M$ US = 1,11 M$ PPA au Canada contre 2,17 M$ au Brésil). Avec un ETF local, les deux pays multiplient l'argent à peu près autant. Au Brésil, les liquidités rapportent environ 5 % réel par an, sans risque.
+  - Briques ajoutées : rembourser ses dettes (consommation ou hypothèque), étudier à l'étranger (frais en dollars US qui suivent le change, pas de salaire pendant, +29,5 % de salaire ensuite), entreprendre (le bénéfice remplace le salaire, faillite selon la survie à 5 ans du pays, rachat, vente), donner.
+  - Événements : 43 (10 marchés, 10 travail, 10 vie perso, 13 entourage). Leurs poids dépendent de l'âge, du pays et des choix passés (`requires`, `excludes`, `weight_if`).
+  - Interface : les 7 briques ; la partie (graine + décisions) est sauvegardée dans le localStorage ; un lien `?seed=` vers une autre graine l'emporte sur la sauvegarde.
+  - Données : les valeurs ≈ ont été remplacées par des valeurs sourcées quand elles existaient. Celles qui restent sont listées dans `data/SOURCES.md` (pension, croissance des salaires, part dépensée, quelques valeurs canadiennes ou brésiliennes, frais immobiliers, frais d'études).
+  - Balance-check (`tools/simulate.py`, 10 stratégies × 100 vies × 2 pays) : aucune stratégie ne gagne à tous les coups ; la meilleure ne finit première que dans 24 à 34 % des vies. Deux problèmes corrigés :
+    - le remboursement d'un don est plafonné à la somme donnée (donner 1 $ suffisait à débloquer des remboursements sans limite) ;
+    - les enfants ne sont plus à charge après les 60 ans du parent (la ruine avec la stratégie liquidités au Canada passe de 23 % à 5 %).
+  - Validation : 11 tests pytest passent ; une partie a été jouée dans le navigateur avec une entreprise, un rechargement de page et la reprise, jusqu'au miroir.
+  - Limites connues :
+    - taux hypothécaire canadien = taux affiché (surestimé) ;
+    - revenus bruts (pas de fiscalité en V1) ;
+    - les rachats d'entreprise sont fréquents (environ 2 par vie d'entrepreneur) ;
+    - rembourser ses dettes change peu de chose, parce que les dettes tirées sont petites face à 1 M$.
+  - Prochaine étape : étape 3 (6 pays, mode réaliste, miroir complet avec Moi ↔ Les autres et Racines ↔ Ailleurs — les compteurs `autres` et `abroad` existent déjà —, déploiement).

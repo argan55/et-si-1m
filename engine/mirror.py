@@ -9,12 +9,12 @@ def _clip(x):
 def mirror(s):
     c = COUNTRIES[s["country"]]
     h, st = s["history"], s["stats"]
-    lived = st["travel_spent"] + st["given"]
-    built = st["invested"]
+    lived = st["travel_spent"] + st["experience"]
+    built = st["invested"] + st["repaid"]
     shares = [
         y["risky"] / total
         for y in h
-        if (total := y["cash"] + y["etf"] + y["property"]) > 0
+        if (total := y["cash"] + y["etf"] + y["property"] + y["business"]) > 0
     ]
     risk = sum(shares) / len(shares) if shares else 0.0
     return {
@@ -31,4 +31,6 @@ def mirror(s):
         "vivre_batir": (built - lived) / (built + lived) if built + lived else 0.0,
         # -1 = Sécurité, +1 = Aventure
         "securite_aventure": _clip(2 * risk - 1 + RULES["choice_axis_weight"] * st["aventure"]),
+        # pour le miroir complet (étape 3)
+        "studied": s["studied"], "abroad": st["abroad"], "autres": st["autres"],
     }
