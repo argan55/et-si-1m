@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 
 const params = new URLSearchParams(location.search)
 // En production (site statique), l'adresse de l'API vient de VITE_API_URL ; en local, le proxy Vite s'en charge.
@@ -6,20 +6,13 @@ const API = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
 const MAX_ACTIONS = 2
 const FAMILY = { marches: 'Marchés', travail: 'Travail', perso: 'Vie perso', entourage: 'Entourage' }
 
+// Durée avant d'afficher le message de réveil (ms) et timeout max (ms)
+const WAKE_THRESHOLD = 3000
+const MAX_WAIT = 90000
+
 const money = (x, cur) =>
   new Intl.NumberFormat('fr-CA', { style: 'currency', currency: cur, maximumFractionDigits: 0 }).format(x)
 const pct = (x) => `${(x * 100).toFixed(1).replace('.', ',')} %`
-
-async function callPlay(seed, country, turns, profile) {
-  const r = await fetch(`${API}/api/play`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ seed, country, turns, profile }),
-  })
-  const body = await r.json()
-  if (!r.ok) throw new Error(typeof body.detail === 'string' ? body.detail : 'Requête invalide.')
-  return body
-}
 
 function newSeed() {
   return Math.floor(Math.random() * 2 ** 31)
@@ -78,20 +71,62 @@ export default function App() {
   const [started, setStarted] = useState(() => resume?.started ?? false)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [wakeMessage, setWakeMessage] = useState(false)
+  const [retryError, setRetryError] = useState(null)
   const ready = mode === 'jeu' || (mode === 'realiste' && profile)
+
+  // Hook pour appeler l'API avec gestion du message de réveil et timeout 90s
+  const callPlayWithWake = useCallback(async (seed, country, turns, profile) => {
+    let wakeTimer = null
+    let abortTimer = null
+    const controller = new AbortController()
+
+    const showWake = () => setWakeMessage(true)
+    const hideWake = () => setWakeMessage(false)
+
+    // Afficher le message après 3 secondes
+    wakeTimer = setTimeout(showWake, WAKE_THRESHOLD)
+    // Abandonner après 90 secondes
+    abortTimer = setTimeout(() => controller.abort(), MAX_WAIT)
+
+    try {
+      const r = await fetch(`${API}/api/play`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ seed, country, turns, profile }),
+        signal: controller.signal,
+      })
+      const body = await r.json()
+      if (!r.ok) throw new Error(typeof body.detail === 'string' ? body.detail : 'Requête invalide.')
+      return body
+    } catch (e) {
+      if (e.name === 'AbortError' || e.name === 'TimeoutError') {
+        // Erreur de timeout : on prépare une fonction de retry avec les mêmes paramètres
+        const retryFn = () => callPlayWithWake(seed, country, turns, profile)
+        setRetryError({ message: 'Le serveur ne répond pas depuis plus de 90 secondes.', retry: retryFn })
+        throw new Error('Le serveur ne répond pas depuis plus de 90 secondes.')
+      }
+      throw e
+    } finally {
+      clearTimeout(wakeTimer)
+      clearTimeout(abortTimer)
+      hideWake()
+    }
+  }, [])
 
   useEffect(() => {
     if (!ready) return
     history.replaceState(null, '', urlFor(seed, country, profile))
     setError('')
-    callPlay(seed, country, turns, profile).then(setView, (e) => {
+    setRetryError(null)
+    callPlayWithWake(seed, country, turns, profile).then(setView, (e) => {
       // sauvegarde illisible (données du jeu modifiées depuis) : on repart du début de cette vie
       setError(`Partie sauvegardée impossible à reprendre (${e.message}). Elle recommence au début.`)
       setTurns([])
       setStarted(false)
-      callPlay(seed, country, [], profile).then(setView, (e2) => setError(e2.message))
+      callPlayWithWake(seed, country, [], profile).then(setView, (e2) => setError(e2.message))
     })
-  }, [seed, ready, JSON.stringify(profile)]) // eslint-disable-line react-hooks/exhaustive-deps -- les décisions sont rejouées une fois au chargement
+  }, [seed, ready, JSON.stringify(profile), callPlayWithWake]) // eslint-disable-line react-hooks/exhaustive-deps -- les décisions sont rejouées une fois au chargement
 
   useEffect(() => {
     if (ready) writeSave({ seed, country, profile, turns, started })
@@ -126,19 +161,21 @@ export default function App() {
   function replayLife() {
     setTurns([])
     setStarted(false)
-    callPlay(seed, country, [], profile).then(setView, (e) => setError(e.message))
+    setRetryError(null)
+    callPlayWithWake(seed, country, [], profile).then(setView, (e) => setError(e.message))
   }
 
   // Joue une ou plusieurs années ; s'arrête dès qu'un choix est attendu.
   async function advance(first, years = 1) {
     setBusy(true)
     setError('')
+    setRetryError(null)
     let t = turns
     try {
       let v = view
       for (let i = 0; i < years && !v.done && (i === 0 || !v.pending); i++) {
         const next = [...t, i === 0 ? first : { actions: [] }]
-        v = await callPlay(seed, country, next, profile)
+        v = await callPlayWithWake(seed, country, next, profile)
         t = next
         setView(v)
         setTurns(t)
@@ -149,12 +186,17 @@ export default function App() {
     setBusy(false)
   }
 
-  if (!mode) return <Shell><Landing onGame={() => setMode('jeu')} onReal={() => setMode('realiste')} /></Shell>
-  if (mode === 'realiste' && !profile) return <Shell onHome={home}><ProfileForm onSubmit={submitProfile} /></Shell>
-  if (!view) return <Shell onHome={home}>{error ? <p className="error">{error}</p> : <p>Tirage en cours…</p>}</Shell>
+  if (!mode) return <Shell wakeMessage={wakeMessage}><Landing onGame={() => setMode('jeu')} onReal={() => setMode('realiste')} /></Shell>
+  if (mode === 'realiste' && !profile) return <Shell onHome={home} wakeMessage={wakeMessage}><ProfileForm onSubmit={submitProfile} /></Shell>
+  if (!view) return <Shell onHome={home} wakeMessage={wakeMessage}>{retryError ? (
+      <div className="error-retry">
+        <p className="error">{retryError.message}</p>
+        <button className="primary" onClick={() => { retryError.retry().then(setView, (e) => setError(e.message)); }}>Réessayer</button>
+      </div>
+    ) : error ? <p className="error">{error}</p> : <p>Tirage en cours…</p>}</Shell>
   if (!started) {
     return (
-      <Shell onHome={home}>
+      <Shell onHome={home} wakeMessage={wakeMessage}>
         <Draw v={view} onStart={() => setStarted(true)}
           onReroll={mode === 'jeu' ? newLife : () => { setProfile(null); setView(null) }} />
       </Shell>
@@ -162,13 +204,13 @@ export default function App() {
   }
   if (view.done)
     return (
-      <Shell onHome={home}>
+      <Shell onHome={home} wakeMessage={wakeMessage}>
         <Mirror v={view} onReplay={replayLife} onNew={home} seed={seed} />
       </Shell>
     )
   return (
-    <Shell onHome={home}>
-      <Year v={view} busy={busy} error={error} onPlay={advance} onNew={home} />
+    <Shell onHome={home} wakeMessage={wakeMessage}>
+      <Year v={view} busy={busy} error={error} retryError={retryError} onRetry={(fn) => { fn().then(setView, (e) => setError(e.message)); }} onPlay={advance} onNew={home} />
     </Shell>
   )
 }
@@ -256,12 +298,17 @@ function ProfileForm({ onSubmit }) {
   )
 }
 
-function Shell({ children, onHome }) {
+function Shell({ children, onHome, wakeMessage }) {
   return (
     <div className="app">
       <header>
         <h1>{onHome ? <button className="link title" onClick={onHome}>Et si… ?</button> : 'Et si… ?'}</h1>
       </header>
+      {wakeMessage && (
+        <div className="wake-banner" role="status" aria-live="polite">
+          Le serveur se réveille, ça peut prendre jusqu'à une minute…
+        </div>
+      )}
       <main>{children}</main>
       <footer>
         Jeu de simulation à but pédagogique. Ce n'est pas un conseil financier. Montants en termes réels, sans fiscalité.
@@ -314,7 +361,7 @@ function incomeLabel(v) {
   return v.retired ? 'Pension' : 'Salaire'
 }
 
-function Year({ v, busy, error, onPlay, onNew }) {
+function Year({ v, busy, error, retryError, onRetry, onPlay, onNew }) {
   const c = v.country
   const [draft, setDraft] = useState([])
   const [choice, setChoice] = useState(null)
@@ -396,7 +443,13 @@ function Year({ v, busy, error, onPlay, onNew }) {
             ))}
           </ul>
         )}
-        {error && <p className="error">{error}</p>}
+        {retryError && (
+          <div className="error-retry">
+            <p className="error">{retryError.message}</p>
+            <button className="primary" onClick={() => { onRetry(retryError.retry); }}>Réessayer</button>
+          </div>
+        )}
+        {error && !retryError && <p className="error">{error}</p>}
         <div className="row">
           <button className="primary" disabled={busy || needChoice} onClick={() => play(1)}>Année suivante</button>
           <button disabled={busy || needChoice} onClick={() => play(5)}>Avancer de 5 ans</button>
