@@ -63,6 +63,23 @@ def test_every_country_plays_to_the_end(code):
         assert mirror(s)["years"] == s["death_age"] - s["start_age"]
 
 
+PROFILE = {"country": "FR", "age": 35, "salary": 40000, "debt": 5000, "amount": 200000, "partner": True, "children": 2}
+
+
+def test_realistic_profile_overrides_draw():
+    s = new_life(12, profile=PROFILE)
+    assert (s["country"], s["age"], s["salary"], s["debt"], s["cash"], s["partner"], s["children"]) == ("FR", 35, 40000, 5000, 200000, True, 2)
+    assert s["death_age"] >= 35 + 8
+    assert new_life(12, profile=PROFILE) == s  # déterministe
+    for bad in ({"age": 5}, {"amount": -1}, {"country": "XX"}, {"partner": "oui"}, {"salary": float("inf")}):
+        with pytest.raises(ValueError):
+            new_life(1, profile={**PROFILE, **bad})
+    client = TestClient(app)
+    r = client.post("/api/play", json={"seed": 12, "profile": PROFILE, "turns": [{"actions": []}]})
+    assert r.status_code == 200 and r.json()["mode"] == "realiste" and r.json()["prize_local"] == 200000
+    assert client.post("/api/play", json={"seed": 12, "profile": {**PROFILE, "age": 200}}).status_code == 422
+
+
 def test_same_seed_same_life():
     s1, turns = bot_turns(42)
     s2 = replay(42, turns)

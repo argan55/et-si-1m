@@ -8,11 +8,11 @@ const money = (x, cur) =>
   new Intl.NumberFormat('fr-CA', { style: 'currency', currency: cur, maximumFractionDigits: 0 }).format(x)
 const pct = (x) => `${(x * 100).toFixed(1).replace('.', ',')} %`
 
-async function callPlay(seed, country, turns) {
+async function callPlay(seed, country, turns, profile) {
   const r = await fetch('/api/play', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ seed, country, turns }),
+    body: JSON.stringify({ seed, country, turns, profile }),
   })
   const body = await r.json()
   if (!r.ok) throw new Error(typeof body.detail === 'string' ? body.detail : 'Requête invalide.')
@@ -40,33 +40,60 @@ function writeSave(game) {
   }
 }
 
+// Mode réaliste : le profil voyage dans l'URL pour qu'un lien redonne la même vie.
+const PROFILE_PARAMS = { pays: 'country', age: 'age', salaire: 'salary', dettes: 'debt', montant: 'amount', couple: 'partner', enfants: 'children' }
+function profileFromUrl() {
+  if (!params.has('montant')) return null
+  const p = {}
+  for (const [q, k] of Object.entries(PROFILE_PARAMS)) p[k] = params.get(q)
+  return { ...p, age: Number(p.age), salary: Number(p.salary), debt: Number(p.debt || 0), amount: Number(p.amount),
+    partner: p.partner === '1', children: Number(p.children || 0) }
+}
+function urlFor(seed, country, profile) {
+  const q = new URLSearchParams({ seed })
+  if (profile) {
+    for (const [name, k] of Object.entries(PROFILE_PARAMS)) q.set(name, k === 'partner' ? (profile.partner ? 1 : 0) : profile[k])
+  } else if (country) q.set('pays', country)
+  return `?${q}`
+}
+
 const urlSeed = Number(params.get('seed')) || null
+const urlProfile = profileFromUrl()
 const saved = loadSave()
-// Un lien partagé vers une autre graine l'emporte sur la sauvegarde.
-const resume = saved && Number.isInteger(saved.seed) && Array.isArray(saved.turns) && (!urlSeed || saved.seed === urlSeed) ? saved : null
+// Un lien partagé vers une autre vie l'emporte sur la sauvegarde.
+const resume = saved && Number.isInteger(saved.seed) && Array.isArray(saved.turns)
+  && (!urlSeed || (saved.seed === urlSeed && JSON.stringify(saved.profile ?? null) === JSON.stringify(urlProfile))) ? saved : null
+const initialProfile = resume ? resume.profile ?? null : urlProfile
 
 export default function App() {
   const [seed, setSeed] = useState(() => resume?.seed ?? urlSeed ?? newSeed())
   const [country] = useState(() => (resume ? resume.country : params.get('pays')) || null)
+  const [profile, setProfile] = useState(initialProfile)
+  // null : écran d'accueil ; 'jeu' : vie tirée au sort ; 'realiste' : le joueur saisit sa situation
+  const [mode, setMode] = useState(() => (resume || urlSeed ? (initialProfile ? 'realiste' : 'jeu') : null))
   const [turns, setTurns] = useState(() => resume?.turns ?? [])
   const [view, setView] = useState(null)
   const [started, setStarted] = useState(() => resume?.started ?? false)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const ready = mode === 'jeu' || (mode === 'realiste' && profile)
 
   useEffect(() => {
-    history.replaceState(null, '', `?seed=${seed}${country ? `&pays=${country}` : ''}`)
+    if (!ready) return
+    history.replaceState(null, '', urlFor(seed, country, profile))
     setError('')
-    callPlay(seed, country, turns).then(setView, (e) => {
+    callPlay(seed, country, turns, profile).then(setView, (e) => {
       // sauvegarde illisible (données du jeu modifiées depuis) : on repart du début de cette vie
       setError(`Partie sauvegardée impossible à reprendre (${e.message}). Elle recommence au début.`)
       setTurns([])
       setStarted(false)
-      callPlay(seed, country, []).then(setView, (e2) => setError(e2.message))
+      callPlay(seed, country, [], profile).then(setView, (e2) => setError(e2.message))
     })
-  }, [seed]) // eslint-disable-line react-hooks/exhaustive-deps -- les décisions sont rejouées une fois au chargement
+  }, [seed, ready, JSON.stringify(profile)]) // eslint-disable-line react-hooks/exhaustive-deps -- les décisions sont rejouées une fois au chargement
 
-  useEffect(() => writeSave({ seed, country, turns, started }), [seed, country, turns, started])
+  useEffect(() => {
+    if (ready) writeSave({ seed, country, profile, turns, started })
+  }, [ready, seed, country, profile, turns, started])
 
   function newLife() {
     setTurns([])
@@ -75,10 +102,29 @@ export default function App() {
     setSeed(newSeed())
   }
 
+  function home() {
+    try {
+      localStorage.removeItem(SAVE_KEY)
+    } catch {
+      /* stockage bloqué : rien à effacer */
+    }
+    setMode(null)
+    setProfile(null)
+    setView(null)
+    setTurns([])
+    setStarted(false)
+    history.replaceState(null, '', location.pathname)
+  }
+
+  function submitProfile(p) {
+    setProfile(p)
+    newLife()
+  }
+
   function replayLife() {
     setTurns([])
     setStarted(false)
-    callPlay(seed, country, []).then(setView, (e) => setError(e.message))
+    callPlay(seed, country, [], profile).then(setView, (e) => setError(e.message))
   }
 
   // Joue une ou plusieurs années ; s'arrête dès qu'un choix est attendu.
@@ -90,7 +136,7 @@ export default function App() {
       let v = view
       for (let i = 0; i < years && !v.done && (i === 0 || !v.pending); i++) {
         const next = [...t, i === 0 ? first : { actions: [] }]
-        v = await callPlay(seed, country, next)
+        v = await callPlay(seed, country, next, profile)
         t = next
         setView(v)
         setTurns(t)
@@ -101,26 +147,118 @@ export default function App() {
     setBusy(false)
   }
 
-  if (!view) return <Shell>{error ? <p className="error">{error}</p> : <p>Tirage en cours…</p>}</Shell>
-  if (!started) return <Shell><Draw v={view} onStart={() => setStarted(true)} onReroll={newLife} /></Shell>
+  if (!mode) return <Shell><Landing onGame={() => setMode('jeu')} onReal={() => setMode('realiste')} /></Shell>
+  if (mode === 'realiste' && !profile) return <Shell onHome={home}><ProfileForm onSubmit={submitProfile} /></Shell>
+  if (!view) return <Shell onHome={home}>{error ? <p className="error">{error}</p> : <p>Tirage en cours…</p>}</Shell>
+  if (!started) {
+    return (
+      <Shell onHome={home}>
+        <Draw v={view} onStart={() => setStarted(true)}
+          onReroll={mode === 'jeu' ? newLife : () => { setProfile(null); setView(null) }} />
+      </Shell>
+    )
+  }
   if (view.done)
     return (
-      <Shell>
-        <Mirror v={view} onReplay={replayLife} onNew={newLife} seed={seed} />
+      <Shell onHome={home}>
+        <Mirror v={view} onReplay={replayLife} onNew={home} seed={seed} />
       </Shell>
     )
   return (
-    <Shell>
-      <Year v={view} busy={busy} error={error} onPlay={advance} onNew={newLife} />
+    <Shell onHome={home}>
+      <Year v={view} busy={busy} error={error} onPlay={advance} onNew={home} />
     </Shell>
   )
 }
 
-function Shell({ children }) {
+function Landing({ onGame, onReal }) {
+  return (
+    <section className="card draw">
+      <p className="eyebrow">Un jeu sur l'argent et le hasard</p>
+      <h2>Que feriez-vous d'un million ?</h2>
+      <p className="lead">
+        Le même million ne vaut pas la même chose selon le pays, l'âge ou le salaire. Vivez une vie année après année, puis regardez ce que vous en avez fait.
+      </p>
+      <div className="choices">
+        <button className="choice" onClick={onGame}>
+          <strong>Une vie tirée au sort</strong>
+          <span>Pays, âge, salaire et famille au hasard. Vous recevez 1 M$ US.</span>
+        </button>
+        <button className="choice" onClick={onReal}>
+          <strong>Ma situation</strong>
+          <span>Vous saisissez votre profil et le montant de votre choix.</span>
+        </button>
+      </div>
+    </section>
+  )
+}
+
+function ProfileForm({ onSubmit }) {
+  const [list, setList] = useState(null)
+  const [error, setError] = useState('')
+  const [f, setF] = useState({ country: 'CA', age: 35, salary: '', debt: 0, amount: '', partner: false, children: 0 })
+  useEffect(() => {
+    fetch('/api/countries')
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then(setList, () => setError('Impossible de charger la liste des pays.'))
+  }, [])
+  const c = list?.find((x) => x.code === f.country)
+  const set = (k) => (e) => setF({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value })
+
+  function submit(e) {
+    e.preventDefault()
+    onSubmit({
+      country: f.country, age: Number(f.age), partner: f.partner, children: Number(f.children),
+      salary: Number(f.salary === '' ? c.salary_median : f.salary),
+      debt: Number(f.debt || 0),
+      amount: Number(f.amount === '' ? Math.round(c.prize_local) : f.amount),
+    })
+  }
+
+  if (error) return <p className="error">{error}</p>
+  if (!list) return <p>Chargement…</p>
+  return (
+    <form className="card draw form" onSubmit={submit}>
+      <p className="eyebrow">Ma situation</p>
+      <h2>Votre profil</h2>
+      <p className="muted">Montants annuels bruts, en {c.currency}. Rien n'est envoyé ailleurs que dans le calcul de cette partie.</p>
+      <label>Pays
+        <select value={f.country} onChange={(e) => setF({ ...f, country: e.target.value, salary: '', amount: '' })}>
+          {list.map((x) => <option key={x.code} value={x.code}>{x.name}</option>)}
+        </select>
+      </label>
+      <div className="grid2">
+        <label>Âge
+          <input type="number" required min={18} max={90} value={f.age} onChange={set('age')} />
+        </label>
+        <label>Salaire annuel ({c.currency})
+          <input type="number" min={0} placeholder={`médian : ${Math.round(c.salary_median)}`} value={f.salary} onChange={set('salary')} />
+        </label>
+        <label>Dettes hors hypothèque ({c.currency})
+          <input type="number" min={0} value={f.debt} onChange={set('debt')} />
+        </label>
+        <label>Montant reçu ({c.currency})
+          <input type="number" min={1} placeholder={`1 M$ US = ${Math.round(c.prize_local)}`} value={f.amount} onChange={set('amount')} />
+        </label>
+        <label>Enfants à charge
+          <input type="number" min={0} max={10} value={f.children} onChange={set('children')} />
+        </label>
+        <label className="check">
+          <input type="checkbox" checked={f.partner} onChange={set('partner')} /> En couple
+        </label>
+      </div>
+      <div className="row">
+        <button className="primary" type="submit">Continuer</button>
+      </div>
+    </form>
+  )
+}
+
+function Shell({ children, onHome }) {
   return (
     <div className="app">
       <header>
-        <h1>1 M$, une vie</h1>
+        <h1>{onHome ? <button className="link title" onClick={onHome}>1 M$, une vie</button> : '1 M$, une vie'}</h1>
       </header>
       <main>{children}</main>
       <footer>
@@ -133,20 +271,20 @@ function Shell({ children }) {
 function Draw({ v, onStart, onReroll }) {
   const c = v.country
   const fam = [v.partner ? 'en couple' : 'célibataire', v.children ? `${v.children} enfant${v.children > 1 ? 's' : ''}` : 'sans enfant'].join(', ')
+  const real = v.mode === 'realiste'
   return (
     <section className="card draw">
-      <p className="eyebrow">Votre vie tirée au sort</p>
+      <p className="eyebrow">{real ? 'Votre situation' : 'Votre vie tirée au sort'}</p>
       <h2>
         Vous avez {v.age} ans et vous vivez {c.where}.
       </h2>
       <p className="lead">{v.origin}</p>
       <div className="big">
-        <span>{money(v.prize_usd, 'USD')}</span>
-        <span className="arrow">=</span>
-        <span>{money(v.cash, c.currency)}</span>
+        {!real && <><span>{money(v.prize_usd, 'USD')}</span><span className="arrow">=</span></>}
+        <span>{money(v.prize_local, c.currency)}</span>
       </div>
       <p className="muted">
-        En pouvoir d'achat local, cela équivaut à <strong>{money(v.cash / c.ppp, 'USD')}</strong> dépensés aux États-Unis.
+        En pouvoir d'achat local, cela équivaut à <strong>{money(v.prize_local / c.ppp, 'USD')}</strong> dépensés aux États-Unis.
       </p>
       <dl className="facts">
         <dt>Salaire</dt><dd>{money(v.salary, c.currency)} / an</dd>
@@ -156,7 +294,7 @@ function Draw({ v, onStart, onReroll }) {
       </dl>
       <div className="row">
         <button className="primary" onClick={onStart}>Vivre cette vie</button>
-        <button onClick={onReroll}>Tirer une autre vie</button>
+        <button onClick={onReroll}>{real ? 'Modifier ma situation' : 'Tirer une autre vie'}</button>
       </div>
     </section>
   )

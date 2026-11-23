@@ -28,6 +28,7 @@
     "business_min_usd": 50000,
     "business_yield": 0.15,
     "business_fail_salary_mult": 0.9,
+    "realistic_label": "Vous recevez cette somme.",
     "origins": {
       "loterie": {"label": "Vous gagnez à la loterie.", "age_min": 20, "age_max": 70, "salary_mult": 1.0},
       "heritage": {"label": "Vous héritez d'un parent.", "age_min": 40, "age_max": 65, "salary_mult": 1.1},
@@ -62,6 +63,7 @@
     "business_min_usd": "Règle de jeu : mise minimale pour créer une entreprise",
     "business_yield": "≈ règle de jeu : bénéfice annuel versé au fondateur, en part du capital investi",
     "business_fail_salary_mult": "Règle de jeu : après une faillite, on retrouve un emploi un peu moins bien payé",
-    "origins": "Règle de jeu : l'origine du 1 M$ fixe la tranche d'âge et le contexte"
+    "origins": "Règle de jeu : l'origine du 1 M$ fixe la tranche d'âge et le contexte",
+    "realistic_label": "Texte du mode réaliste"
   }
 }

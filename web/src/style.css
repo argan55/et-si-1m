@@ -65,6 +65,14 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
 button.link { border: none; background: none; padding: 0; color: var(--muted); text-decoration: underline; font-size: inherit; }
+button.link.title { color: var(--ink); text-decoration: none; font-weight: 700; letter-spacing: 0.02em; }
+.choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 16px; }
+button.choice { display: flex; flex-direction: column; gap: 6px; text-align: left; padding: 16px; border-radius: 12px; }
+button.choice strong { font-size: 1.05rem; }
+button.choice span { color: var(--muted); font-size: 0.9rem; }
+.form { display: flex; flex-direction: column; gap: 12px; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+label.check { flex-direction: row; align-items: center; gap: 8px; align-self: end; padding-bottom: 8px; }
 button.link:hover { color: var(--ink); }
 button.selected { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 

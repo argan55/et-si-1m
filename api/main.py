@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 
 from engine import mirror, replay
 from engine.data import COUNTRIES, EVENT_BY_ID, RULES
-from engine.game import available, emergency_fund, net_worth, retired, spending, usd, working
+from engine.game import PROFILE_LIMITS, available, emergency_fund, net_worth, retired, spending, usd, working
 
 app = FastAPI(title="1 M$, une vie")
 
@@ -14,9 +14,21 @@ class Turn(BaseModel):
     choice: int | None = None
 
 
+class Profile(BaseModel):
+    """Mode réaliste. Montants en monnaie locale ; mêmes bornes que le moteur (PROFILE_LIMITS)."""
+    country: str
+    age: int = Field(ge=PROFILE_LIMITS["age"][0], le=PROFILE_LIMITS["age"][1])
+    salary: float = Field(ge=PROFILE_LIMITS["salary"][0], le=PROFILE_LIMITS["salary"][1])
+    debt: float = Field(ge=PROFILE_LIMITS["debt"][0], le=PROFILE_LIMITS["debt"][1])
+    amount: float = Field(ge=PROFILE_LIMITS["amount"][0], le=PROFILE_LIMITS["amount"][1])
+    partner: bool = False
+    children: int = Field(default=0, ge=PROFILE_LIMITS["children"][0], le=PROFILE_LIMITS["children"][1])
+
+
 class Play(BaseModel):
     seed: int = Field(ge=0, lt=2**32)
     country: str | None = None
+    profile: Profile | None = None
     turns: list[Turn] = Field(default=[], max_length=RULES["max_age"])
 
 
@@ -42,8 +54,10 @@ def view(s):
         "given": s["stats"]["given"],
         "fx_index": s["fx"],
         "business": s["business"], "studying": s["studying"], "studied": s["studied"], "retired": retired(s),
-        "origin": RULES["origins"][s["origin"]]["label"],
+        "mode": "realiste" if s["profile"] else "jeu",
+        "origin": RULES["realistic_label"] if s["profile"] else RULES["origins"][s["origin"]]["label"],
         "prize_usd": RULES["prize_usd"],
+        "prize_local": s["profile"]["amount"] if s["profile"] else RULES["prize_usd"] * c["fx_per_usd"],
         "age": s["age"], "start_age": s["start_age"], "done": s["done"],
         "working": working(s), "salary": s["salary"], "lifestyle": s["lifestyle"],
         "partner": s["partner"], "children": s["children"],
@@ -58,12 +72,22 @@ def view(s):
     }
 
 
+@app.get("/api/countries")
+def countries():
+    """Pour le formulaire du mode réaliste : pays, monnaie et valeurs par défaut."""
+    return [
+        {"code": k, "name": c["name"], "currency": c["currency"], "salary_median": c["salary_median"],
+         "prize_local": RULES["prize_usd"] * c["fx_per_usd"]}
+        for k, c in COUNTRIES.items()
+    ]
+
+
 @app.post("/api/play")
 def play(p: Play):
     if p.country is not None and p.country not in COUNTRIES:
         raise HTTPException(400, "Pays inconnu.")
     try:
-        s = replay(p.seed, [t.model_dump() for t in p.turns], p.country)
+        s = replay(p.seed, [t.model_dump() for t in p.turns], p.country, p.profile.model_dump() if p.profile else None)
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
     return view(s)

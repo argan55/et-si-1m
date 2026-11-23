@@ -30,9 +30,27 @@ def salary_sigma(c):
     return math.sqrt(2) * NormalDist().inv_cdf((c["gini"] + 1) / 2)
 
 
-def new_life(seed, country=None):
+PROFILE_LIMITS = {"age": (18, 90), "salary": (0, 1e9), "debt": (0, 1e10), "amount": (1, 1e11), "children": (0, 10)}
+
+
+def _check_profile(p):
+    """Mode réaliste : le profil saisi par le joueur (montants en monnaie locale)."""
+    if p.get("country") not in COUNTRIES:
+        raise ValueError("Pays inconnu.")
+    for k, (lo, hi) in PROFILE_LIMITS.items():
+        v = float(p[k])
+        if not (math.isfinite(v) and lo <= v <= hi):
+            raise ValueError(f"Valeur hors limites : {k}.")
+    if not isinstance(p.get("partner"), bool):
+        raise ValueError("Valeur invalide : partner.")
+    return p
+
+
+def new_life(seed, country=None, profile=None):
     if country is not None and country not in COUNTRIES:
         raise ValueError(f"Pays inconnu : {country}")
+    if profile is not None:
+        country = _check_profile(profile)["country"]
     rng = _rng(seed, _LIFE)
     drawn = str(rng.choice(sorted(COUNTRIES)))  # toujours tiré, pour garder la même suite d'aléa
     code = country or drawn
@@ -40,19 +58,26 @@ def new_life(seed, country=None):
     origin = str(rng.choice(sorted(RULES["origins"])))
     o = RULES["origins"][origin]
     age = int(rng.integers(o["age_min"], o["age_max"] + 1))
-    death = round(rng.normal(c["life_expectancy"], RULES["life_sd"]))
-    death = int(min(max(death, age + RULES["min_years"]), RULES["max_age"]))
+    raw_death = round(rng.normal(c["life_expectancy"], RULES["life_sd"]))
+    death = int(min(max(raw_death, age + RULES["min_years"]), RULES["max_age"]))
     salary = float(c["salary_median"] * math.exp(rng.normal(0, salary_sigma(c))) * o["salary_mult"])
     partner = bool(rng.random() < c["partner_prob"])
     span = RULES["children_full_age"] - RULES["children_from_age"]
     kids = int(rng.poisson(c["fertility"] * min(max((age - RULES["children_from_age"]) / span, 0), 1)))
     has_debt = rng.random() < c["debt_prob"]
     debt = float(salary * c["debt_to_salary"] * rng.lognormal(0, RULES["debt_sigma"])) if has_debt else 0.0
+    cash = RULES["prize_usd"] * c["fx_per_usd"]
+    if profile is not None:
+        origin, age = "realiste", int(profile["age"])
+        salary, debt, cash = float(profile["salary"]), float(profile["debt"]), float(profile["amount"])
+        partner, kids = profile["partner"], int(profile["children"])
+        # seul l'âge au décès reste tiré au sort (même tirage qu'en mode jeu, recalé sur l'âge saisi)
+        death = int(min(max(raw_death, age + RULES["min_years"]), RULES["max_age"]))
     return {
-        "seed": seed, "country": code, "origin": origin,
+        "seed": seed, "country": code, "origin": origin, "profile": profile,
         "start_age": age, "age": age, "death_age": death, "year": 0,
         "salary": salary, "lifestyle": salary, "partner": partner, "children": kids,
-        "cash": RULES["prize_usd"] * c["fx_per_usd"], "etf": 0.0, "homes": [],
+        "cash": cash, "etf": 0.0, "homes": [],
         "debt": debt, "debt_years": RULES["debt_years"],
         "fx": 1.0,  # indice réel du dollar US en monnaie locale (1 = au départ)
         "business": None, "studying": 0, "studied": False,
@@ -454,9 +479,12 @@ def _step(s, actions, choice):
     return s
 
 
-def replay(seed, turns, country=None):
-    """Rejoue une vie à partir de sa graine et de la liste de ses décisions."""
-    s = new_life(seed, country)
+def replay(seed, turns, country=None, profile=None):
+    """Rejoue une vie à partir de sa graine (et de son profil en mode réaliste) et de ses décisions."""
+    try:
+        s = new_life(seed, country, profile)
+    except (KeyError, TypeError) as e:
+        raise ValueError(f"Profil invalide : {e}") from e
     for t in turns:
         try:
             step(s, t.get("actions", []), t.get("choice"))
