@@ -108,6 +108,8 @@ input, select { font: inherit; padding: 8px; border-radius: 8px; border: 1px sol
 .stats div { border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
 .stats dt { color: var(--muted); font-size: 0.8rem; }
 .stats dd { margin: 0; font-size: 1.2rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.axis-block { margin: 8px 0 14px; }
+.axis-block p { margin: 2px 0 0; text-align: center; }
 .axis { display: grid; grid-template-columns: 80px 1fr 80px; align-items: center; gap: 12px; margin: 12px 0; }
 .axis span:last-child { text-align: right; }
 .axis .bar { position: relative; height: 6px; border-radius: 3px; background: var(--line); }

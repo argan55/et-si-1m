@@ -51,7 +51,7 @@ def test_full_game_reaches_mirror():
         assert s["done"] and s["age"] == s["death_age"]
         m = mirror(s)
         assert len(m["trajectory"]) == s["death_age"] - s["start_age"]
-        assert -1 <= m["vivre_batir"] <= 1 and -1 <= m["securite_aventure"] <= 1
+        assert all(-1 <= m[a] <= 1 for a in ("vivre_batir", "securite_aventure", "moi_autres", "racines_ailleurs"))
         assert all(np.isfinite(y["net_worth"]) for y in s["history"])
 
 
@@ -128,6 +128,18 @@ def test_bricks_interact():
     s = new_life(5)
     step(s, [{"type": "give", "amount": 1000}], None)
     assert s["stats"]["given"] >= 1000
+
+
+def test_mirror_axes_follow_behaviour():
+    def life(**stats):
+        s = new_life(21, "CA")
+        step(s, [], s["pending"] and 1)
+        s["stats"].update(stats)
+        return mirror(s)
+    base = life()
+    assert life(invested=1e6)["vivre_batir"] > 0.9 and life(invested=1e6, travel_spent=2e5)["vivre_batir"] < 0
+    assert life(given=3e5)["moi_autres"] > 0.5 > base["moi_autres"] > life(travel_spent=3e5)["moi_autres"]
+    assert base["racines_ailleurs"] == -1 < life(abroad=1)["racines_ailleurs"] < life(abroad=2, trips_abroad=5)["racines_ailleurs"]
 
 
 def test_refund_never_exceeds_gifts():

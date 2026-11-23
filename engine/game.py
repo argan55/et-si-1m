@@ -82,7 +82,7 @@ def new_life(seed, country=None, profile=None):
         "fx": 1.0,  # indice réel du dollar US en monnaie locale (1 = au départ)
         "business": None, "studying": 0, "studied": False,
         "pending": None, "done": False, "log": [],
-        "stats": {"travel_spent": 0.0, "experience": 0.0, "trips": 0, "given": 0.0, "refunded": 0.0, "gifts": 0,
+        "stats": {"travel_spent": 0.0, "experience": 0.0, "trips": 0, "trips_abroad": 0, "given": 0.0, "refunded": 0.0, "gifts": 0,
                   "invested": 0.0, "repaid": 0.0, **{k: 0 for k in COUNTERS}},
         "history": [],
     }
@@ -194,6 +194,7 @@ def _act(s, a, c):
         cost = c["trip_small"] if a["kind"] == "small" else usd(s, RULES["trip_big_usd"])
         _spend(s, cost)
         st["trips"] += 1
+        st["trips_abroad"] += a["kind"] == "big"
         st["travel_spent"] += cost
         s["log"].append(f"Voyage : {_money(cost, c)}")
     elif t == "repay":

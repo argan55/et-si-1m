@@ -608,12 +608,36 @@ function Chart({ points, height = 220, axes = true }) {
   )
 }
 
-function Axis({ left, right, value }) {
+// Une phrase neutre par axe : [côté gauche, milieu, côté droit].
+const AXES = [
+  ['vivre_batir', 'Vivre', 'Bâtir', [
+    'Vous avez mis une bonne part de l\'argent dans des moments vécus.',
+    'Vous avez partagé entre profiter et construire.',
+    'Vous avez surtout fait fructifier l\'argent.']],
+  ['securite_aventure', 'Sécurité', 'Aventure', [
+    'Vous avez gardé l\'argent à l\'abri des secousses.',
+    'Vous avez pris des risques mesurés.',
+    'Vous avez accepté les montagnes russes.']],
+  ['moi_autres', 'Moi', 'Les autres', [
+    'L\'argent a surtout servi vos propres projets.',
+    'Vous avez dépensé pour vous et donné à d\'autres, dans des proportions voisines.',
+    'Une part importante est allée à d\'autres que vous.']],
+  ['racines_ailleurs', 'Racines', 'Ailleurs', [
+    'Votre vie s\'est déroulée près de chez vous.',
+    'Vous êtes parti·e de temps en temps.',
+    'Vous avez souvent vécu ou voyagé ailleurs.']],
+]
+
+function Axis({ left, right, value, sentences }) {
+  const sentence = sentences[value < -0.33 ? 0 : value > 0.33 ? 2 : 1]
   return (
-    <div className="axis">
-      <span>{left}</span>
-      <div className="bar"><i style={{ left: `${((value + 1) / 2) * 100}%` }} /></div>
-      <span>{right}</span>
+    <div className="axis-block">
+      <div className="axis" role="img" aria-label={`${left} ↔ ${right} : ${sentence}`}>
+        <span>{left}</span>
+        <div className="bar"><i style={{ left: `${((value + 1) / 2) * 100}%` }} /></div>
+        <span>{right}</span>
+      </div>
+      <p className="muted small">{sentence}</p>
     </div>
   )
 }
@@ -637,8 +661,9 @@ function Mirror({ v, onReplay, onNew, seed }) {
       </dl>
       <h3>Votre style</h3>
       <p className="muted">Ni bon ni mauvais : une façon de faire parmi d'autres.</p>
-      <Axis left="Vivre" right="Bâtir" value={m.vivre_batir} />
-      <Axis left="Sécurité" right="Aventure" value={m.securite_aventure} />
+      {AXES.map(([key, left, right, sentences]) => (
+        <Axis key={key} left={left} right={right} value={m[key]} sentences={sentences} />
+      ))}
       <div className="row">
         <button className="primary" onClick={onNew}>Une autre vie</button>
         <button onClick={onReplay}>Rejouer cette vie</button>
