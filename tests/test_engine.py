@@ -142,6 +142,18 @@ def test_mirror_axes_follow_behaviour():
     assert base["racines_ailleurs"] == -1 < life(abroad=1)["racines_ailleurs"] < life(abroad=2, trips_abroad=5)["racines_ailleurs"]
 
 
+def test_bankruptcy_stops_debt_spiral():
+    s = new_life(8, "US")
+    s["cash"], s["debt"] = 0.0, 10 * s["lifestyle"]
+    step(s, [], None)
+    assert s["debt"] == 0 and s["stats"]["bankruptcies"] == 1 and s["spend_mult"] <= 1
+    for _ in range(40):  # ensuite, plus de spirale
+        if s["done"]:
+            break
+        step(s, [], s["pending"] and 1)
+        assert s["debt"] <= 3 * s["lifestyle"] + 1
+
+
 def test_refund_never_exceeds_gifts():
     s = new_life(6, "CA")
     step(s, [{"type": "give", "amount": 1}], None)

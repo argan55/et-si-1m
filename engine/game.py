@@ -80,10 +80,11 @@ def new_life(seed, country=None, profile=None):
         "cash": cash, "etf": 0.0, "homes": [],
         "debt": debt, "debt_years": RULES["debt_years"],
         "fx": 1.0,  # indice réel du dollar US en monnaie locale (1 = au départ)
+        "spend_mult": 1.0,  # train de vie réduit après une faillite personnelle
         "business": None, "studying": 0, "studied": False,
         "pending": None, "done": False, "log": [],
         "stats": {"travel_spent": 0.0, "experience": 0.0, "trips": 0, "trips_abroad": 0, "given": 0.0, "refunded": 0.0, "gifts": 0,
-                  "invested": 0.0, "repaid": 0.0, **{k: 0 for k in COUNTERS}},
+                  "invested": 0.0, "repaid": 0.0, "bankruptcies": 0, **{k: 0 for k in COUNTERS}},
         "history": [],
     }
 
@@ -114,7 +115,7 @@ def spending(s):
     c = COUNTRIES[s["country"]]
     kids = s["children"] if s["age"] < RULES["children_leave_age"] else 0  # les enfants finissent par partir
     eq = (1 + RULES["child_equiv"] * kids) * (RULES["partner_equiv"] if s["partner"] else 1)
-    x = c["spend_ratio"] * s["lifestyle"] * eq
+    x = c["spend_ratio"] * s["lifestyle"] * eq * s["spend_mult"]
     if any(h["use"] == "residence" for h in s["homes"]):
         x *= 1 - c["rent_share"]
     return x
@@ -372,6 +373,19 @@ def _cover_shortfall(s, c):
         s["log"].append("Vous avez dû vous endetter.")
 
 
+def _bankruptcy(s):
+    """Faillite personnelle : au-delà de N années de train de vie, la dette est effacée,
+    tout le patrimoine restant est perdu et les dépenses sont ramenées au niveau du revenu."""
+    if s["debt"] <= RULES["bankruptcy_income_years"] * s["lifestyle"]:
+        return
+    s["debt"], s["cash"], s["etf"], s["homes"], s["business"] = 0.0, 0.0, 0.0, [], None
+    s["stats"]["bankruptcies"] += 1
+    spend = spending(s)
+    if spend > 0:
+        s["spend_mult"] *= min(1.0, income(s) / spend)
+    s["log"].append("Faillite personnelle : vos dettes sont effacées, mais vous repartez de zéro avec un train de vie réduit.")
+
+
 def _market_year(s, yr):
     rows = _BY_RETURN[s["country"]]
     n = RULES["extreme_years"]
@@ -419,6 +433,7 @@ def _finances(s, yr, c):
             s["salary"] *= 1 + RULES["study_premium"]
             s["log"].append("Diplôme en poche : votre salaire augmente.")
     _cover_shortfall(s, c)
+    _bankruptcy(s)
     if working(s):
         s["salary"] *= 1 + c["salary_growth_real"]
         s["lifestyle"] = s["salary"]
