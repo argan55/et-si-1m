@@ -1,16 +1,28 @@
 # 1 M$, une vie
 
-Un jeu de simulation dans le navigateur. Vous recevez 1 M$ au cours d'une vie tirée au sort, et vous décidez chaque année quoi en faire. À la fin, un miroir montre la trajectoire de votre patrimoine et votre « style ».
+Un jeu de simulation dans le navigateur. Vous recevez 1 M$ au cours d'une vie tirée au sort, ou un montant de votre choix dans votre propre situation, et vous décidez chaque année quoi en faire. À la fin, un miroir montre la trajectoire de votre patrimoine et votre « style ».
 
 Le message du jeu : **1 M$ ne vaut pas la même chose pour tout le monde**.
 
 > Jeu à but pédagogique. **Ce n'est pas un conseil financier.**
 
-État actuel : **étape 2**.
-- Pays : Canada et Brésil.
-- 7 briques : investir, immobilier, voyager, rembourser ses dettes, étudier à l'étranger, entreprendre, donner.
-- 43 événements, et un miroir simplifié.
+État actuel : **étape 3a**.
+- **6 pays** : Canada, Brésil, France, Hong Kong, États-Unis, Mexique. Chacun a ses vrais marchés de 2002 à 2025.
+- **Deux modes** :
+  - *jeu* : une vie tirée au sort, avec 1 M$ US ;
+  - *réaliste* : vous saisissez votre pays, votre âge, votre salaire, vos dettes, votre famille et le montant reçu.
+- **7 briques** : investir, immobilier, voyager, rembourser ses dettes, étudier à l'étranger, entreprendre, donner.
+- **43 événements.**
+- **Miroir à 4 axes** : Vivre ↔ Bâtir, Sécurité ↔ Aventure, Moi ↔ Les autres, Racines ↔ Ailleurs.
 - La partie en cours est sauvegardée dans le navigateur.
+
+| Accueil | Tirage | Ma situation |
+|---|---|---|
+| ![Écran d'accueil : choisir entre une vie tirée au sort et sa propre situation](docs/screenshots/1-accueil.jpg) | ![Tirage d'une vie : 24 ans au Canada, 1 M$ US gagné à la loterie](docs/screenshots/2-tirage.jpg) | ![Formulaire du mode réaliste, pays Mexique](docs/screenshots/3-ma-situation.jpg) |
+
+| Une année | Miroir | Les 4 axes |
+|---|---|---|
+| ![Une année : patrimoine, événement de l'année et décisions possibles](docs/screenshots/4-annee.jpg) | ![Miroir : courbe du patrimoine et bilan de la vie](docs/screenshots/5-miroir.jpg) | ![Miroir : les quatre axes du style, sans jugement](docs/screenshots/6-miroir-axes.jpg) |
 
 ## Lancer le jeu en local
 
@@ -28,7 +40,7 @@ npm run dev        # http://localhost:5173
 
 Pour lancer les tests : `.venv/Scripts/python -m pytest`
 
-Pour partager une vie, utilisez l'URL avec sa graine : `?seed=42`. Pour imposer un pays : `?seed=42&pays=CA`.
+Pour partager une vie, utilisez l'URL avec sa graine : `?seed=42`. Pour imposer un pays : `?seed=42&pays=CA`. En mode réaliste, le profil est aussi dans l'URL, donc un lien redonne la même vie.
 
 ## Architecture
 
@@ -38,7 +50,7 @@ Pour partager une vie, utilisez l'URL avec sa graine : `?seed=42`. Pour imposer 
 | `api/` | FastAPI **sans état** : le client envoie la graine et la liste de ses décisions, le serveur rejoue la vie |
 | `web/` | Interface React (Vite) |
 | `data/` | Toutes les hypothèses chiffrées, avec leurs sources |
-| `tests/` | pytest : déterminisme, partie complète, écart Canada/Brésil, briques, sources présentes |
+| `tests/` | pytest : déterminisme, partie complète dans les 6 pays, mode réaliste, briques, miroir, faillite, sources présentes |
 | `tools/` | Construction de l'historique de marché, simulateur de stratégies (`python tools/simulate.py 100`) |
 
 Principes du moteur :
@@ -50,10 +62,6 @@ Principes du moteur :
 ## Sources des données
 
 Toutes les sources sont dans [data/SOURCES.md](data/SOURCES.md), avec la liste des valeurs qui restent des estimations. Les principales :
-- **Marchés** : MSCI (actions locales, dividendes compris), Statistique Canada et IBGE (inflation), OCDE/FRED (taux, change), BRI (immobilier).
-- **Pays** : Banque mondiale, Statistique Canada, IBGE, Banque du Canada, Banco Central do Brasil, ACI/CREA, FipeZap, Equifax, CNC, OCDE.
+- **Marchés** : MSCI (actions locales, dividendes compris), instituts statistiques, Eurostat et Banque mondiale (inflation), OCDE/FRED et HKMA (taux), FRED (change), BRI (immobilier). Le Mexique commence en 2006, faute d'indice immobilier BRI avant 2005.
+- **Pays** : Banque mondiale ; Statistique Canada, IBGE, INSEE, C&SD, BLS, INEGI ; Banque du Canada, Banco Central do Brasil, Banque de France, HKMA, Banco de México ; ACI/CREA, FipeZap, RVD, NAR, SHF, Freddie Mac ; Equifax, CNC, OCDE.
 - **Règles de jeu et événements** : ce sont des choix de conception, chacun documenté dans son fichier.
-
-## Captures d'écran
-
-*À ajouter.*
