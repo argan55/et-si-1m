@@ -84,8 +84,7 @@ _À mettre à jour à la fin de chaque étape._
     - un ETF unique (S&P 500 réel) pour les deux pays : on suppose que la PPA tient dans le temps ;
     - captures d'écran du README à faire.
   - Prochaine étape : étape 2 (7 briques, 40 événements).
-- 2026-11-23 : **étape 2 terminée (code)**, commits en attente.
-  - Git : dépôt initialisé. L'état V0 est indexé (`git add`) mais pas commité, car `user.name` et `user.email` ne sont pas configurés. Il faut commiter l'index tel quel (V0), puis `git add -A` pour l'étape 2.
+- 2026-11-23 : **étape 2 terminée**, commitée par l'utilisateur (`71e8049` V0, `d75d0f7` étape 2).
   - Marchés : un ETF local par pays.
     - Fichier `data/market_history.csv`, construit par `tools/build_market_history.py`.
     - Contenu : MSCI en monnaie locale dividendes compris, inflation, taux court, change réel et immobilier réel (BRI), fenêtre commune 2002-2025.
@@ -106,3 +105,29 @@ _À mettre à jour à la fin de chaque étape._
     - les rachats d'entreprise sont fréquents (environ 2 par vie d'entrepreneur) ;
     - rembourser ses dettes change peu de chose, parce que les dettes tirées sont petites face à 1 M$.
   - Prochaine étape : étape 3 (6 pays, mode réaliste, miroir complet avec Moi ↔ Les autres et Racines ↔ Ailleurs — les compteurs `autres` et `abroad` existent déjà —, déploiement).
+- 2026-11-23 : **étape 3a terminée** (6 commits, de `955b540` à `f7e8e21`, plus celui-ci).
+  - Pays : France, Hong Kong, États-Unis et Mexique ajoutés, avec la même méthode (MSCI local dividendes compris, inflation, taux court, change, immobilier BRI).
+    - Fenêtre 2002-2025, sauf le Mexique : 2006-2025, car l'indice BRI commence en 2005.
+    - Inflation de Hong Kong et du Mexique = moyenne annuelle (Banque mondiale) ; décembre à décembre ailleurs.
+    - Codes MSCI : pays développés « 9 » + code ISO, pays émergents « 8 » + code ISO (Mexique 848400).
+    - La rupture d'échelle MSCI 2011-2012 touche aussi le Mexique ; la correction (USD × change de fin d'année) est généralisée.
+    - Les valeurs non trouvées pour les nouveaux pays sont marquées ≈ et listées dans `data/SOURCES.md`.
+  - Mode réaliste : écran d'accueil, formulaire (pays, âge, salaire, dettes, montant, couple, enfants), profil validé dans le moteur et l'API, encodé dans l'URL et la sauvegarde. Seul l'âge au décès reste tiré au sort.
+  - Miroir à 4 axes :
+    - Moi ↔ Les autres : dons face aux dépenses pour soi, avec un an de train de vie comme plancher, plus le compteur `autres` ;
+    - Racines ↔ Ailleurs : départs et voyages à l'étranger ;
+    - Vivre ↔ Bâtir : passé à une échelle logarithmique (il était collé à « Bâtir »).
+  - Rachats d'entreprise : seulement après 3 ans, prix = 2 fois la valeur actuelle ; environ 0,3 offre par entreprise (0,5 au Canada et en France) contre environ 2 avant.
+  - Taux hypothécaire canadien : taux effectif (Banque du Canada V122667786, 4,37 %) au lieu du taux affiché (6,23 %).
+  - Balance-check, 9 stratégies × 100 vies × 6 pays :
+    - aucun pays n'est dominé sur tous les critères ;
+    - Canada limite : « tout en ETF » premier dans 53 % des vies, mais moins bon en années de liberté ; c'est dû aux vraies données, signalé sans être corrigé ;
+    - faille critique corrigée : la dette forcée se réamortissait sans fin (un cas à -1,1 Md$). Nouvelle règle de faillite personnelle au-delà de 3 années de train de vie ; pire cas : -0,88 M$ PPA.
+  - README : 6 captures dans `docs/screenshots/`.
+  - Validation : 20 tests pytest passent. Les deux modes ont été joués dans le navigateur jusqu'au miroir, avec un rechargement de page en cours de partie.
+  - Limites connues :
+    - à Hong Kong, 10 à 16 % de faillites, surtout à la retraite : la pension est estimée (≈ 30 % du salaire) et le Gini est celui des revenus des ménages avant transferts ;
+    - le Brésil et le Mexique saturent les années de liberté financière (98 à 100 %) ;
+    - la brique « rembourser ses dettes » pèse peu ;
+    - beaucoup de paramètres des nouveaux pays restent estimés (≈).
+  - Prochaine étape : étape 3b (déploiement en ligne, à valider : publication de la démo).
