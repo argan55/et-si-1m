@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 
 const params = new URLSearchParams(location.search)
+// En production (site statique), l'adresse de l'API vient de VITE_API_URL ; en local, le proxy Vite s'en charge.
+const API = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
 const MAX_ACTIONS = 2
 const FAMILY = { marches: 'Marchés', travail: 'Travail', perso: 'Vie perso', entourage: 'Entourage' }
 
@@ -9,7 +11,7 @@ const money = (x, cur) =>
 const pct = (x) => `${(x * 100).toFixed(1).replace('.', ',')} %`
 
 async function callPlay(seed, country, turns, profile) {
-  const r = await fetch('/api/play', {
+  const r = await fetch(`${API}/api/play`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ seed, country, turns, profile }),
@@ -198,7 +200,7 @@ function ProfileForm({ onSubmit }) {
   const [error, setError] = useState('')
   const [f, setF] = useState({ country: 'CA', age: 35, salary: '', debt: 0, amount: '', partner: false, children: 0 })
   useEffect(() => {
-    fetch('/api/countries')
+    fetch(`${API}/api/countries`)
       .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
       .then(setList, () => setError('Impossible de charger la liste des pays.'))
   }, [])
@@ -258,7 +260,7 @@ function Shell({ children, onHome }) {
   return (
     <div className="app">
       <header>
-        <h1>{onHome ? <button className="link title" onClick={onHome}>1 M$, une vie</button> : '1 M$, une vie'}</h1>
+        <h1>{onHome ? <button className="link title" onClick={onHome}>Et si… ?</button> : 'Et si… ?'}</h1>
       </header>
       <main>{children}</main>
       <footer>

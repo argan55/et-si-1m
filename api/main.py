@@ -1,12 +1,20 @@
 """API sans état : le client envoie la graine et toutes ses décisions, le serveur rejoue la vie."""
+import os
+
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from engine import mirror, replay
 from engine.data import COUNTRIES, EVENT_BY_ID, RULES
 from engine.game import PROFILE_LIMITS, available, emergency_fund, net_worth, retired, spending, usd, working
 
-app = FastAPI(title="1 M$, une vie")
+app = FastAPI(title="Et si… ? (1 M$, une vie)")
+
+# Origines autorisées (site statique hébergé ailleurs), séparées par des virgules. Vide en local : le proxy Vite suffit.
+_origins = [o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "").split(",") if o.strip()]
+if _origins:
+    app.add_middleware(CORSMiddleware, allow_origins=_origins, allow_methods=["GET", "POST"], allow_headers=["Content-Type"])
 
 
 class Turn(BaseModel):

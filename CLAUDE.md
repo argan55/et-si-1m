@@ -1,4 +1,4 @@
-# Jeu 1 M$ : « 1 M$, une vie »
+# Jeu 1 M$ : « Et si… ? » (sous-titre : « 1 M$, une vie »)
 
 Jeu de simulation dans le navigateur, inspiré des mécaniques de *1 in 8 Billion* (1in8b.life) : le joueur reçoit 1 M$ au cours d'une vie tirée au sort et décide année par année quoi en faire. Message du jeu : **1 M$ ne vaut pas la même chose pour tout le monde**. Ne pas reprendre le nom ni le design du jeu d'origine. Ce n'est pas un conseil financier (l'indiquer dans l'interface).
 
@@ -66,6 +66,7 @@ Le code est écrit par Claude Code. Réponds en français. L'interface est en fr
 
 ## État
 _À mettre à jour à la fin de chaque étape._
+- 2026-11-23 : nom retenu : **« Et si… ? »**, sous-titre « 1 M$, une vie » (README, titre de la page alignés ; vérifier le titre dans `web/src`).
 - 2026-11-23 : spec V1 écrite.
 - 2026-11-23 : **étape 1 (V0 jouable) terminée.**
   - Contenu : Canada + Brésil ; briques investir, immobilier, voyager ; 15 événements (dont 3 à choix) ; miroir simplifié (2 axes : Vivre ↔ Bâtir, Sécurité ↔ Aventure).
@@ -131,3 +132,10 @@ _À mettre à jour à la fin de chaque étape._
     - la brique « rembourser ses dettes » pèse peu ;
     - beaucoup de paramètres des nouveaux pays restent estimés (≈).
   - Prochaine étape : étape 3b (déploiement en ligne, à valider : publication de la démo).
+- 2026-11-23 (Cline) : **préparation étape 3b faite** (non publiée).
+  - Nom : **« Et si… ? »** avec le sous-titre « 1 M$, une vie » (titre `web/index.html`, en-tête `web/src/App.jsx`, README).
+  - `render.yaml` : deux services Render (API `et-si-api` Python, site statique `et-si` React/Vite).
+  - CORS via `ALLOWED_ORIGINS` dans `api/main.py` (origines autorisées séparées par virgules, proxy Vite en local).
+  - `VITE_API_URL` dans `web/src/App.jsx` (adresse de l'API en production, vide en local).
+  - README : section « Déploiement » avec `render.yaml`, CORS, `VITE_API_URL` et section « Limites connues ».
+  - Rien n'est publié (pas de service Render créé, pas de démo en ligne).

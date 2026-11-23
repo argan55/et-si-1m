@@ -1,4 +1,6 @@
-# 1 M$, une vie
+# Et si… ?
+
+*1 M$, une vie*
 
 Un jeu de simulation dans le navigateur. Vous recevez 1 M$ au cours d'une vie tirée au sort, ou un montant de votre choix dans votre propre situation, et vous décidez chaque année quoi en faire. À la fin, un miroir montre la trajectoire de votre patrimoine et votre « style ».
 
@@ -41,6 +43,21 @@ npm run dev        # http://localhost:5173
 Pour lancer les tests : `.venv/Scripts/python -m pytest`
 
 Pour partager une vie, utilisez l'URL avec sa graine : `?seed=42`. Pour imposer un pays : `?seed=42&pays=CA`. En mode réaliste, le profil est aussi dans l'URL, donc un lien redonne la même vie.
+
+## Déploiement (Render, offre gratuite)
+
+Le fichier `render.yaml` décrit deux services : l'API (FastAPI) et le site statique (`web/dist`).
+1. Sur Render : *New → Blueprint*, choisir le dépôt.
+2. Une fois l'API créée, renseigner `VITE_API_URL` (site statique) avec l'adresse de l'API, et `ALLOWED_ORIGINS` (API) avec l'adresse du site, puis redéployer.
+
+L'API gratuite s'endort après un moment d'inactivité : la première partie peut mettre environ 30 secondes à démarrer.
+
+## Limites connues
+
+- **Hong Kong** : 10 à 16 % des vies finissent en faillite, surtout à la retraite. La pension est estimée (≈ 30 % du salaire) et l'indice d'inégalité utilisé est celui des revenus des ménages avant transferts.
+- Brésil et Mexique : les années de liberté financière sont saturées (98 à 100 %), car les liquidités y rapportent un taux réel élevé.
+- Beaucoup de paramètres des pays les plus récents restent des estimations, listées dans [data/SOURCES.md](data/SOURCES.md).
+- Pas de fiscalité en V1.
 
 ## Architecture
 
