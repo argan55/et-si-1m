@@ -2,21 +2,23 @@
 
 Chaque nombre utilisé par le moteur vient d'un fichier de ce dossier. La source de chaque champ est indiquée à côté de lui (clé `sources` des fichiers JSON). Ce document résume les sources et liste les valeurs qui restent des estimations.
 
-## `market_history.csv` : historique annuel 2002-2025, Canada et Brésil
+## `market_history.csv` : historique annuel par pays
 
 Une ligne par pays et par année. Chaque année de jeu rejoue **une année réelle complète** du pays (bootstrap conjoint) : bourse, inflation, taux, change et immobilier bougent ensemble, comme dans la réalité.
 
-| Colonne | Définition | Source |
+| Colonne | Définition | Sources |
 |---|---|---|
-| `stocks_real` | Rendement réel des actions locales, dividendes compris, de décembre à décembre | MSCI Canada et MSCI Brazil, *Gross Total Return* en monnaie locale (API publique MSCI, codes 912400 et 907600) |
-| `inflation` | Inflation de décembre à décembre | Statistique Canada, IPC (vecteur v41690973) ; IBGE/BCB, IPCA mensuel (SGS 433) |
-| `cash_real` | Rendement réel de l'épargne liquide (taux court moyen de l'année) | OCDE via FRED : IR3TIB01CAA156N (Canada, 3 mois interbancaire), IRSTCI01BRA156N (Brésil, taux au jour le jour ≈ Selic/CDI) |
-| `fx_real` | Variation réelle du dollar US en monnaie locale (> 0 : le dollar coûte plus cher) | FRED EXCAUS / EXBZUS (décembre), IPC américain FRED CPIAUCSL |
-| `home_real` | Variation réelle des prix résidentiels, T4 sur T4 | BRI via FRED : QCAR628BIS, QBRR628BIS |
+| `stocks_real` | Rendement réel des actions locales, dividendes compris, de décembre à décembre | MSCI *Gross Total Return* en monnaie locale (API publique MSCI) : Canada 912400, Brazil 907600, France 925000, Hong Kong 934400, USA 984000, Mexico 848400 |
+| `inflation` | Inflation de décembre à décembre | Statistique Canada, IPC (v41690973) ; IBGE/BCB, IPCA (SGS 433) ; Eurostat, IPCH France (FRED CP0000FRM086NEST) ; BLS, CPI (FRED CPIAUCSL). **Hong Kong et Mexique : moyenne annuelle** (Banque mondiale, FP.CPI.TOTL.ZG), faute de série mensuelle à jour sans clé d'API |
+| `cash_real` | Rendement réel de l'épargne liquide (taux court moyen de l'année) | OCDE via FRED : 3 mois interbancaire (Canada, France, Mexique), taux au jour le jour (Brésil, ≈ Selic/CDI) ; bons du Trésor à 3 mois (États-Unis, TB3MS) ; HIBOR 3 mois (HKMA) |
+| `fx_real` | Variation réelle du dollar US en monnaie locale (> 0 : le dollar coûte plus cher) | FRED EXCAUS, EXBZUS, EXUSEU, EXHKUS, EXMXUS (décembre) ; IPC américain (CPIAUCSL). États-Unis : 0 par définition |
+| `home_real` | Variation réelle des prix résidentiels, T4 sur T4 | BRI via FRED : QCAR628BIS, QBRR628BIS, QFRR628BIS, QHKR628BIS, QUSR628BIS, QMXR628BIS |
 
-**Pourquoi 2002-2025** : c'est la fenêtre commune aux deux pays. MSCI ne fournit pas de niveaux mensuels avant décembre 2000, et l'indice immobilier de la BRI pour le Brésil commence en 2001. La fenêtre est la même pour les deux pays, pour ne pas fausser la comparaison.
+**Fenêtre 2002-2025**, la même pour tous les pays sauf le Mexique : MSCI ne fournit pas de niveaux mensuels avant décembre 2000, et l'indice immobilier de la BRI pour le Brésil commence en 2001.
 
-**Correction** : la série MSCI Brazil en BRL change d'échelle d'août 2011 à janvier 2012. Pour 2011 et 2012, le niveau est reconstruit à partir de la version en USD multipliée par le cours PTAX de fin d'année (Banco Central do Brasil, SGS 1).
+**Mexique : 2006-2025** (20 ans), parce que l'indice immobilier de la BRI pour le Mexique ne commence qu'en 2005.
+
+**Correction de 2011-2012** : les séries MSCI en monnaie locale du Brésil et du Mexique changent d'échelle d'août 2011 à janvier 2012. Pour ces deux années, le niveau est reconstruit à partir de la version en USD multipliée par le change de fin d'année : PTAX (Banco Central do Brasil, SGS 1) et FRED DEXMXUS.
 
 Pour régénérer le fichier : `python tools/build_market_history.py <dossier>`, à partir des séries brutes téléchargées (la liste est en tête du script).
 
@@ -24,15 +26,14 @@ Pour régénérer le fichier : `python tools/build_market_history.py <dossier>`,
 
 Chaque champ a sa source dans la clé `sources` du fichier. Principales références :
 
-- **Banque mondiale** : PPA de la consommation privée, espérance de vie, Gini, fécondité.
-- **Statistique Canada** : salaires médians (déclarants T1), part du logement dans les dépenses, couples, voyages.
-- **IBGE** : revenu moyen du travail (PNAD Contínua), part du logement (POF), voyages (PNAD Turismo), survie des entreprises.
-- **Banco Central do Brasil** : taux du crédit aux familles, taux hypothécaire (SGS 20772), endettement (SGS 29265).
-- **Banque du Canada** : taux hypothécaire affiché à 5 ans (V80691335).
-- **ACI/CREA**, **FipeZap** : prix des logements, rendement locatif brésilien.
+- **Banque mondiale** : PPA de la consommation privée, espérance de vie, Gini, fécondité, change.
+- **Instituts statistiques** : salaires (Statistique Canada, IBGE, INSEE, C&SD, BLS, INEGI), part du logement, couples, voyages.
+- **Banques centrales** : taux hypothécaires et taux du crédit (Banque du Canada, Banco Central do Brasil, Banque de France, HKMA, Banco de México), endettement.
+- **Prix des logements** : ACI/CREA, FipeZap, RVD, NAR, SHF.
+- **Freddie Mac** (PMMS) : taux hypothécaire américain.
 - **Equifax Canada**, **CNC (Peic)** : endettement des ménages.
 - **OCDE**, *Regards sur l'éducation 2026* : prime salariale d'une maîtrise.
-- **ISDE/Statistique Canada**, **IBGE** : survie des entreprises à 5 ans.
+- **ISDE/Statistique Canada**, **IBGE**, **BLS** : survie des entreprises à 5 ans.
 
 ## Valeurs encore estimées (≈)
 
@@ -40,18 +41,24 @@ Je n'ai pas trouvé de source précise pour ces valeurs. Elles sont marquées «
 
 | Valeur | Pays | Pourquoi |
 |---|---|---|
-| `pension_ratio` (taux de remplacement de la retraite) | CA, BR | OCDE *Pensions at a Glance* inaccessible aux téléchargements automatisés |
-| `salary_growth_real` | CA, BR | Pas de série trouvée pour le Brésil ; ordre de grandeur OCDE pour le Canada |
-| `spend_ratio` (part du revenu dépensée) | CA, BR | Règle de jeu calée sur des taux d'épargne de 5 à 10 % |
-| `partner_prob` | BR | Pas de chiffre du Censo 2022 trouvé |
-| `debt_prob` | CA | Part des ménages avec une dette hors hypothèque non trouvée (Enquête sur la sécurité financière) |
-| `debt_rate` | CA | Taux moyen du crédit à la consommation non trouvé |
-| `rent_yield` | CA | Rendement locatif brut : source payante (Global Property Guide) |
-| `home_costs`, `buy_costs`, `sell_costs` | CA, BR | Taxes foncières, droits de mutation, courtage : ordres de grandeur |
+| `pension_ratio` (taux de remplacement de la retraite) | tous | OCDE *Pensions at a Glance* inaccessible aux téléchargements automatisés |
+| `salary_growth_real` | tous | Ordre de grandeur OCDE pour CA, FR, US ; rien trouvé pour BR, HK, MX |
+| `spend_ratio` (part du revenu dépensée) | tous | Règle de jeu calée sur des taux d'épargne de 5 à 10 % |
+| `rent_share` | FR, HK, MX | Enquêtes budgets (INSEE BdF, C&SD HES, INEGI ENIGH) non consultées |
+| `partner_prob` | BR, FR, HK, US, MX | Seul le Canada a un chiffre trouvé |
+| `debt_prob`, `debt_to_salary`, `debt_rate` | CA (en partie), FR, HK, US, MX | Seul le Brésil est sourcé en entier |
+| `rent_yield` | CA, FR, HK, US, MX | Source payante (Global Property Guide) ; seul le Brésil est sourcé |
+| `home_price` | FR | Les médianes des Notaires ne sont publiées qu'en image |
+| `mortgage_rate` | HK | Dérivé du HIBOR + marge usuelle, pas de moyenne officielle publiée |
+| `home_costs`, `buy_costs`, `sell_costs` | tous | Taxes foncières, droits de mutation, courtage : ordres de grandeur |
+| `trip_small` | FR, HK, US, MX | Seuls le Canada et le Brésil sont sourcés |
+| `business_survival_5y` | FR, HK, MX | US via une source secondaire ; MX extrapolé depuis la survie à 2 ans |
+| `retirement_age` | FR | 64 ans (réforme 2023), dont l'application a été débattue |
 | `study_tuition_usd` | commun | Source secondaire (GoStudyIn citant NCES), pas le rapport *Open Doors* |
 | `business_yield` | commun | Règle de jeu |
-| `trip_big_usd` | BR | Donnée canadienne appliquée au Brésil en dollars US |
+| `trip_big_usd` | tous sauf CA | Donnée canadienne appliquée aux autres pays en dollars US |
 
 Autres limites connues :
 - le taux hypothécaire canadien est le **taux affiché**, qui surestime le taux réellement négocié ;
-- les revenus sont **bruts**, puisqu'il n'y a pas de fiscalité en V1.
+- les revenus sont **bruts**, puisqu'il n'y a pas de fiscalité en V1 ;
+- le Gini de Hong Kong (0,539) porte sur le revenu des ménages avant impôts et transferts, contre un revenu disponible pour la plupart des autres pays : la dispersion des salaires y est sans doute surestimée.

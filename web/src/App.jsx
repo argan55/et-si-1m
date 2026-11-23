@@ -137,7 +137,7 @@ function Draw({ v, onStart, onReroll }) {
     <section className="card draw">
       <p className="eyebrow">Votre vie tirée au sort</p>
       <h2>
-        Vous avez {v.age} ans et vous vivez au {c.name}.
+        Vous avez {v.age} ans et vous vivez {c.where}.
       </h2>
       <p className="lead">{v.origin}</p>
       <div className="big">

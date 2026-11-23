@@ -55,6 +55,14 @@ def test_full_game_reaches_mirror():
         assert all(np.isfinite(y["net_worth"]) for y in s["history"])
 
 
+@pytest.mark.parametrize("code", ["CA", "BR", "FR", "HK", "US", "MX"])
+def test_every_country_plays_to_the_end(code):
+    for seed in range(15):
+        s, _ = bot_turns(seed, code)
+        assert s["done"] and all(np.isfinite(y["net_worth"]) for y in s["history"])
+        assert mirror(s)["years"] == s["death_age"] - s["start_age"]
+
+
 def test_same_seed_same_life():
     s1, turns = bot_turns(42)
     s2 = replay(42, turns)
@@ -160,7 +168,7 @@ def test_every_number_has_a_source():
                 assert k in data["sources"], k
     rules = json.loads((DATA / "rules.json").read_text(encoding="utf-8"))
     assert set(rules["rules"]) <= set(rules["sources"])
-    assert set(COUNTRIES) == {"CA", "BR"} == set(MARKET)
+    assert set(COUNTRIES) == {"CA", "BR", "FR", "HK", "US", "MX"} == set(MARKET)
     assert all(len(rows) >= 20 for rows in MARKET.values())
     families = Counter(e["family"] for e in EVENTS)
     assert len(EVENTS) >= 40 and all(n >= 10 for n in families.values()), families

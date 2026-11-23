@@ -31,7 +31,7 @@ def view(s):
     c = COUNTRIES[s["country"]]
     last = s["history"][-1] if s["history"] else None
     return {
-        "country": {"code": s["country"], "name": c["name"], "currency": c["currency"],
+        "country": {"code": s["country"], "name": c["name"], "where": c["where"], "currency": c["currency"],
                     "ppp": c["ppp_per_intl_usd"], "fx": c["fx_per_usd"], "life_expectancy": c["life_expectancy"],
                     "home_price": c["home_price"], "buy_costs": c["buy_costs"]},
         # prix du moment, en monnaie locale (ce qui se paie en dollars suit le change)
