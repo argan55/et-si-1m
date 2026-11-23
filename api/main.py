@@ -1,0 +1,62 @@
+"""API sans état : le client envoie la graine et toutes ses décisions, le serveur rejoue la vie."""
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
+
+from engine import mirror, replay
+from engine.data import COUNTRIES, EVENT_BY_ID, RULES
+from engine.game import available, emergency_fund, net_worth, spending, working
+
+app = FastAPI(title="1 M$, une vie")
+
+
+class Turn(BaseModel):
+    actions: list[dict] = Field(default=[], max_length=RULES["max_actions"])
+    choice: int | None = None
+
+
+class Play(BaseModel):
+    seed: int = Field(ge=0, lt=2**32)
+    country: str | None = None
+    turns: list[Turn] = Field(default=[], max_length=RULES["max_age"])
+
+
+def _event(eid):
+    if not eid:
+        return None
+    e = EVENT_BY_ID[eid]
+    return {"id": eid, "family": e["family"], "text": e["text"], "choices": [o["label"] for o in e.get("choices", [])]}
+
+
+def view(s):
+    c = COUNTRIES[s["country"]]
+    last = s["history"][-1] if s["history"] else None
+    return {
+        "country": {"code": s["country"], "name": c["name"], "currency": c["currency"],
+                    "ppp": c["ppp_per_intl_usd"], "fx": c["fx_per_usd"],
+                    "trip_small": c["trip_small"], "trip_big": c["trip_big"], "home_price": c["home_price"], "buy_costs": c["buy_costs"],
+                    "life_expectancy": c["life_expectancy"]},
+        "origin": RULES["origins"][s["origin"]]["label"],
+        "prize_usd": RULES["prize_usd"],
+        "age": s["age"], "start_age": s["start_age"], "done": s["done"],
+        "working": working(s), "salary": s["salary"], "lifestyle": s["lifestyle"],
+        "partner": s["partner"], "children": s["children"],
+        "cash": s["cash"], "etf": s["etf"], "debt": s["debt"], "homes": s["homes"],
+        "net_worth": net_worth(s), "net_worth_ppp": net_worth(s) / c["ppp_per_intl_usd"],
+        "spending": spending(s), "emergency_fund": emergency_fund(s), "available": available(s),
+        "last_year": last and {**{k: last[k] for k in ("age", "inflation", "market_year", "market_return", "income", "spend", "log")},
+                               "event": _event(last["event"])},
+        "pending": _event(s["pending"]),
+        "history": [{"age": y["age"], "net_worth_ppp": y["net_worth_ppp"]} for y in s["history"]],
+        "mirror": mirror(s) if s["done"] else None,
+    }
+
+
+@app.post("/api/play")
+def play(p: Play):
+    if p.country is not None and p.country not in COUNTRIES:
+        raise HTTPException(400, "Pays inconnu.")
+    try:
+        s = replay(p.seed, [t.model_dump() for t in p.turns], p.country)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    return view(s)

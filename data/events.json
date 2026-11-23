@@ -1,0 +1,71 @@
+{
+  "_note": "Poids relatifs (règle de jeu). requires : working, retired, partner, no_partner, home, rental, etf. age_factor : le poids croît avec l'âge (âge/50). Effets : voir engine/game.py::apply_effects.",
+  "sources": {
+    "weight": "Règle de jeu : fréquences relatives choisies pour rythmer la partie, pas des probabilités statistiques",
+    "effects": "Règle de jeu ; les krachs et années record rejouent des années réelles (data/returns.csv)"
+  },
+  "events": [
+    {"id": "krach", "family": "marches", "weight": 0.5,
+     "text": "Krach boursier : les marchés s'effondrent.",
+     "effects": {"market": "worst"}},
+    {"id": "record", "family": "marches", "weight": 0.5,
+     "text": "Année record : la bourse s'envole.",
+     "effects": {"market": "best"}},
+    {"id": "inflation", "family": "marches", "weight": 0.5, "country_weight": {"BR": 2.5},
+     "text": "Poussée d'inflation : les prix grimpent, l'épargne en liquide fond.",
+     "effects": {"inflation_add": 0.06}},
+    {"id": "taux", "family": "marches", "weight": 0.5, "country_weight": {"BR": 2},
+     "text": "La banque centrale relève fortement ses taux.",
+     "effects": {"rate_add": 0.03}},
+
+    {"id": "promotion", "family": "travail", "weight": 1, "requires": ["working"], "age_max": 60,
+     "text": "Promotion ! Votre salaire augmente de 15 %.",
+     "effects": {"salary_mult": 1.15}},
+    {"id": "perte_emploi", "family": "travail", "weight": 0.7, "requires": ["working"], "country_weight": {"BR": 1.5},
+     "text": "Vous perdez votre emploi. Il vous faut plusieurs mois pour en retrouver un, moins bien payé.",
+     "effects": {"income_mult": 0.4, "salary_mult": 0.9}},
+    {"id": "offre_etranger", "family": "travail", "weight": 0.5, "requires": ["working"], "age_max": 55,
+     "text": "On vous propose un poste à l'étranger, mieux payé, loin de vos proches.",
+     "choices": [
+       {"label": "Accepter et partir", "effects": {"salary_mult": 1.3, "cash_salary": -0.2, "aventure": 1, "abroad": 1}},
+       {"label": "Refuser et rester", "effects": {"aventure": -1}}
+     ]},
+
+    {"id": "rencontre", "family": "perso", "weight": 1, "requires": ["no_partner"], "age_max": 75,
+     "text": "Vous rencontrez quelqu'un. Vous emménagez ensemble et partagez les frais.",
+     "effects": {"partner": true}},
+    {"id": "enfant", "family": "perso", "weight": 2, "requires": ["partner"], "age_min": 20, "age_max": 45,
+     "text": "Un enfant arrive dans la famille.",
+     "effects": {"children_add": 1}},
+    {"id": "separation", "family": "perso", "weight": 0.4, "requires": ["partner"],
+     "text": "Séparation. Le partage des biens liquides vous coûte cher.",
+     "effects": {"partner": false, "liquid_pct": -0.25}},
+    {"id": "sante", "family": "perso", "weight": 0.6, "age_factor": true,
+     "text": "Un problème de santé vous oblige à payer des soins.",
+     "effects": {"income_mult": 0.8, "cash_salary": -0.1},
+     "effects_by_country": {"BR": {"income_mult": 0.8, "cash_salary": -0.5}}},
+
+    {"id": "proche_argent", "family": "entourage", "weight": 1,
+     "text": "Un proche traverse une passe difficile et vous demande de l'aide financière.",
+     "choices": [
+       {"label": "Donner l'équivalent d'un an de salaire", "effects": {"give_salary": 1}},
+       {"label": "Refuser poliment", "effects": {}}
+     ]},
+    {"id": "heritage", "family": "entourage", "weight": 0.4, "age_min": 40,
+     "text": "Un oncle éloigné vous laisse un petit héritage.",
+     "effects": {"cash_salary": 1}},
+    {"id": "arnaque", "family": "entourage", "weight": 0.6,
+     "text": "Un ami vous propose un placement « garanti à 30 % par an ».",
+     "choices": [
+       {"label": "Placer 10 % de votre épargne", "effects": {"liquid_pct": -0.1, "aventure": 1}},
+       {"label": "Décliner", "effects": {"aventure": -1}}
+     ]},
+
+    {"id": "locataire_impaye", "family": "entourage", "weight": 1.5, "requires": ["rental"],
+     "text": "Votre locataire cesse de payer. Une année de loyers perdue.",
+     "effects": {"rent_mult": 0}},
+    {"id": "travaux", "family": "perso", "weight": 1.2, "requires": ["home"],
+     "text": "Toiture, plomberie : gros travaux imprévus sur vos biens.",
+     "effects": {"home_pct": -0.03}}
+  ]
+}
