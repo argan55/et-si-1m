@@ -139,3 +139,15 @@ _À mettre à jour à la fin de chaque étape._
   - `VITE_API_URL` dans `web/src/App.jsx` (adresse de l'API en production, vide en local).
   - README : section « Déploiement » avec `render.yaml`, CORS, `VITE_API_URL` et section « Limites connues ».
   - Rien n'est publié (pas de service Render créé, pas de démo en ligne).
+- 2026-11-23 (Cline) : **tâche 2 terminée** - Message réveil serveur.
+  - Build Vite : succès ( `dist/` généré).
+  - Tests pytest : 20 tests passent.
+  - Commit `0cd8df1` : "Message de réveil du serveur" (2 fichiers modifiés : `web/src/App.jsx`, `web/src/style.css`).
+- 2026-11-24 : **correction du réveil serveur** (suite de `0cd8df1`).
+  - Seule une réponse 4xx de l'API fait recommencer la vie. Une panne (5xx, réseau, délai de 90 s) garde la partie et propose « Réessayer ».
+  - « Réessayer » en cours de partie relance `advance()` avec la décision qui a échoué et les années restantes ; les boutons sont bloqués pendant la tentative ; le message disparaît en cas de succès.
+  - « Rejouer cette vie » passe par le même chargement.
+  - Bandeau de réveil en couleur d'accent, plus en rouge d'erreur.
+  - Validation : 20 tests pytest passent, build Vite OK ; testé dans le navigateur en coupant l'API (en cours d'année, puis après un rechargement de la page).
+  - Pas testé dans le navigateur : le cas 4xx (sauvegarde illisible) et le délai de 90 s.
+  - Prochaine étape : étape 3b, publication de la démo sur Render (à valider).

@@ -96,17 +96,16 @@ export default function App() {
         body: JSON.stringify({ seed, country, turns, profile }),
         signal: controller.signal,
       })
-      const body = await r.json()
-      if (!r.ok) throw new Error(typeof body.detail === 'string' ? body.detail : 'Requête invalide.')
-      return body
-    } catch (e) {
-      if (e.name === 'AbortError' || e.name === 'TimeoutError') {
-        // Erreur de timeout : on prépare une fonction de retry avec les mêmes paramètres
-        const retryFn = () => callPlayWithWake(seed, country, turns, profile)
-        setRetryError({ message: 'Le serveur ne répond pas depuis plus de 90 secondes.', retry: retryFn })
-        throw new Error('Le serveur ne répond pas depuis plus de 90 secondes.')
+      // Seule une réponse 4xx est une vraie erreur de l'API (e.api) ; le reste (5xx, réseau, délai) se réessaie.
+      if (r.status >= 400 && r.status < 500) {
+        const body = await r.json().catch(() => ({}))
+        throw Object.assign(new Error(typeof body.detail === 'string' ? body.detail : 'Requête invalide.'), { api: true })
       }
-      throw e
+      if (!r.ok) throw new Error(`Le serveur a répondu ${r.status}.`)
+      return await r.json()
+    } catch (e) {
+      if (e.api) throw e
+      throw new Error(e.name === 'AbortError' ? 'Le serveur ne répond pas depuis plus de 90 secondes.' : 'Impossible de joindre le serveur.')
     } finally {
       clearTimeout(wakeTimer)
       clearTimeout(abortTimer)
@@ -114,19 +113,26 @@ export default function App() {
     }
   }, [])
 
-  useEffect(() => {
-    if (!ready) return
-    history.replaceState(null, '', urlFor(seed, country, profile))
+  // Rejoue la vie jusqu'aux décisions t ; une panne du serveur propose « Réessayer » sans rien effacer.
+  function load(t) {
     setError('')
     setRetryError(null)
-    callPlayWithWake(seed, country, turns, profile).then(setView, (e) => {
+    const fail = (e) => (e.api ? setError(e.message) : setRetryError({ message: e.message }))
+    callPlayWithWake(seed, country, t, profile).then(setView, (e) => {
+      if (!e.api || !t.length) return fail(e)
       // sauvegarde illisible (données du jeu modifiées depuis) : on repart du début de cette vie
       setError(`Partie sauvegardée impossible à reprendre (${e.message}). Elle recommence au début.`)
       setTurns([])
       setStarted(false)
-      callPlayWithWake(seed, country, [], profile).then(setView, (e2) => setError(e2.message))
+      callPlayWithWake(seed, country, [], profile).then(setView, fail)
     })
-  }, [seed, ready, JSON.stringify(profile), callPlayWithWake]) // eslint-disable-line react-hooks/exhaustive-deps -- les décisions sont rejouées une fois au chargement
+  }
+
+  useEffect(() => {
+    if (!ready) return
+    history.replaceState(null, '', urlFor(seed, country, profile))
+    load(turns)
+  }, [seed, ready, JSON.stringify(profile)]) // eslint-disable-line react-hooks/exhaustive-deps -- les décisions sont rejouées une fois au chargement
 
   useEffect(() => {
     if (ready) writeSave({ seed, country, profile, turns, started })
@@ -161,8 +167,8 @@ export default function App() {
   function replayLife() {
     setTurns([])
     setStarted(false)
-    setRetryError(null)
-    callPlayWithWake(seed, country, [], profile).then(setView, (e) => setError(e.message))
+    setView(null)
+    load([])
   }
 
   // Joue une ou plusieurs années ; s'arrête dès qu'un choix est attendu.
@@ -171,9 +177,10 @@ export default function App() {
     setError('')
     setRetryError(null)
     let t = turns
+    let i = 0
     try {
       let v = view
-      for (let i = 0; i < years && !v.done && (i === 0 || !v.pending); i++) {
+      for (; i < years && !v.done && (i === 0 || !v.pending); i++) {
         const next = [...t, i === 0 ? first : { actions: [] }]
         v = await callPlayWithWake(seed, country, next, profile)
         t = next
@@ -181,7 +188,9 @@ export default function App() {
         setTurns(t)
       }
     } catch (e) {
-      setError(e.message)
+      // panne du serveur : on garde la décision et les années restantes pour « Réessayer »
+      if (e.api) setError(e.message)
+      else setRetryError({ message: e.message, first: i === 0 ? first : { actions: [] }, years: years - i })
     }
     setBusy(false)
   }
@@ -191,7 +200,7 @@ export default function App() {
   if (!view) return <Shell onHome={home} wakeMessage={wakeMessage}>{retryError ? (
       <div className="error-retry">
         <p className="error">{retryError.message}</p>
-        <button className="primary" onClick={() => { retryError.retry().then(setView, (e) => setError(e.message)); }}>Réessayer</button>
+        <button className="primary" onClick={() => load(turns)}>Réessayer</button>
       </div>
     ) : error ? <p className="error">{error}</p> : <p>Tirage en cours…</p>}</Shell>
   if (!started) {
@@ -210,7 +219,7 @@ export default function App() {
     )
   return (
     <Shell onHome={home} wakeMessage={wakeMessage}>
-      <Year v={view} busy={busy} error={error} retryError={retryError} onRetry={(fn) => { fn().then(setView, (e) => setError(e.message)); }} onPlay={advance} onNew={home} />
+      <Year v={view} busy={busy} error={error} retryError={retryError} onRetry={() => advance(retryError.first, retryError.years)} onPlay={advance} onNew={home} />
     </Shell>
   )
 }
@@ -446,7 +455,7 @@ function Year({ v, busy, error, retryError, onRetry, onPlay, onNew }) {
         {retryError && (
           <div className="error-retry">
             <p className="error">{retryError.message}</p>
-            <button className="primary" onClick={() => { onRetry(retryError.retry); }}>Réessayer</button>
+            <button className="primary" disabled={busy} onClick={onRetry}>Réessayer</button>
           </div>
         )}
         {error && !retryError && <p className="error">{error}</p>}
