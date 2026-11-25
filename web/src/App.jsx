@@ -160,6 +160,7 @@ export default function App() {
     setView(null)
     setTurns([])
     setStarted(false)
+    setSeed(newSeed()) // sinon « Une vie tirée au sort » redonne la vie abandonnée
     history.replaceState(null, '', location.pathname)
   }
 
