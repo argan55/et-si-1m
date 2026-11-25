@@ -41,7 +41,7 @@ Je n'ai pas trouvé de source précise pour ces valeurs. Elles sont marquées «
 
 | Valeur | Pays | Pourquoi |
 |---|---|---|
-| `pension_ratio` (taux de remplacement de la retraite) | tous | OCDE *Pensions at a Glance* inaccessible aux téléchargements automatisés |
+| `pension_ratio` (taux de remplacement de la retraite) | tous sauf HK | OCDE *Pensions at a Glance* inaccessible aux téléchargements automatisés |
 | `salary_growth_real` | tous | Ordre de grandeur OCDE pour CA, FR, US ; rien trouvé pour BR, HK, MX |
 | `spend_ratio` (part du revenu dépensée) | tous | Règle de jeu calée sur des taux d'épargne de 5 à 10 % |
 | `rent_share` | FR, HK, MX | Enquêtes budgets (INSEE BdF, C&SD HES, INEGI ENIGH) non consultées |
@@ -60,4 +60,18 @@ Je n'ai pas trouvé de source précise pour ces valeurs. Elles sont marquées «
 
 Autres limites connues :
 - les revenus sont **bruts**, puisqu'il n'y a pas de fiscalité en V1 ;
-- le Gini de Hong Kong (0,539) porte sur le revenu des ménages avant impôts et transferts, contre un revenu disponible pour la plupart des autres pays : la dispersion des salaires y est sans doute surestimée.
+- le Gini de Hong Kong (0,473) est celui du C&SD après impôts et transferts sociaux (recensement 2016), sur le revenu des ménages et non par personne : il reste un peu plus élevé que s'il était calculé comme celui de la Banque mondiale.
+
+## Retraite à Hong Kong
+
+Le moteur représente la retraite par un seul chiffre : la pension vaut `pension_ratio` × le dernier train de vie. Pour Hong Kong, ce chiffre vient de l'OCDE et résume le régime obligatoire :
+
+| Élément | Valeur | Source | Dans le moteur |
+|---|---|---|---|
+| Taux de remplacement brut, régimes obligatoires, salaire moyen | 41,5 % (homme), 39,0 % (femme) | OCDE, *Pensions at a Glance Asia/Pacific 2024* | `pension_ratio` = 0,415 |
+| MPF : cotisations obligatoires | 5 % salarié + 5 % employeur | [MPFA, Mandatory contributions](https://www.mpfa.org.hk/en/mpf-system/mandatory-contributions) | inclus dans le taux OCDE |
+| MPF : revenu pris en compte | de 7 100 à 30 000 HK$/mois (85 200 à 360 000 HK$/an) ; retrait à 65 ans | MPFA | inclus dans le taux OCDE |
+| Old Age Allowance (OAA) | 1 640 HK$/mois dès 70 ans, sans condition de ressources (1er février 2025) | [SWD, Level of Allowance](https://swd.gov.hk/en/pubsvc/socsecu/ssallowance/ssa_amt/ssa_amt_all) | non représentée (≈ 8 % du salaire médian) |
+| Old Age Living Allowance (OALA) | 4 250 HK$/mois dès 65 ans, si le patrimoine d'une personne seule est sous 406 000 HK$ (1er février 2025) | [SWD, OALA](https://swd.gov.hk/oala/index_e.html) | non représentée (condition de patrimoine) |
+
+Limites : le taux OCDE suppose une carrière complète et ne dépend pas du salaire dans le moteur. Comme le revenu cotisable du MPF est plafonné, la vraie pension des hauts salaires est plus faible (l'OCDE 2022 donnait 26,8 % à 2 fois le salaire moyen).

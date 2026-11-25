@@ -376,13 +376,15 @@ def _cover_shortfall(s, c):
 def _bankruptcy(s):
     """Faillite personnelle : au-delà de N années de train de vie, la dette est effacée,
     tout le patrimoine restant est perdu et les dépenses sont ramenées au niveau du revenu."""
-    if s["debt"] <= RULES["bankruptcy_income_years"] * s["lifestyle"]:
+    # les biens couvrent la dette : pas de faillite (sinon un salaire à 0 rendrait la moindre dette fatale)
+    if s["debt"] <= RULES["bankruptcy_income_years"] * s["lifestyle"] or net_worth(s) >= 0:
         return
     s["debt"], s["cash"], s["etf"], s["homes"], s["business"] = 0.0, 0.0, 0.0, [], None
     s["stats"]["bankruptcies"] += 1
     spend = spending(s)
     if spend > 0:
-        s["spend_mult"] *= min(1.0, income(s) / spend)
+        # pendant les études le revenu est nul : on se cale sur le salaire, sinon les dépenses tombent à 0 pour toujours
+        s["spend_mult"] *= min(1.0, (income(s) or s["salary"]) / spend)
     s["log"].append("Faillite personnelle : vos dettes sont effacées, mais vous repartez de zéro avec un train de vie réduit.")
 
 

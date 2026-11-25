@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from api.main import app
 from engine import mirror, new_life, replay, step
 from engine.data import COUNTRIES, DATA, EVENTS, MARKET
-from engine.game import apply_effects, available, flags, usd
+from engine.game import apply_effects, available, flags, income, usd
 
 
 def bot_turns(seed, country=None, strategy="random"):
@@ -152,6 +152,26 @@ def test_bankruptcy_stops_debt_spiral():
             break
         step(s, [], s["pending"] and 1)
         assert s["debt"] <= 3 * s["lifestyle"] + 1
+
+
+def test_bankruptcy_only_when_assets_fall_short():
+    # salaire à 0 et petite dette : les biens couvrent la dette, pas de faillite
+    p = {"country": "FR", "age": 70, "salary": 0, "debt": 1000, "amount": 500000, "partner": False, "children": 0}
+    s = new_life(1, profile=p)
+    step(s, [], None)
+    assert s["stats"]["bankruptcies"] == 0 and s["cash"] > 400000
+    # faillite pendant les études (revenu nul) : le train de vie baisse, sans tomber à 0
+    p = {"country": "CA", "age": 30, "salary": 50000, "debt": 1e6, "amount": 200000, "partner": False, "children": 0}
+    s = new_life(1, profile=p)
+    step(s, [{"type": "study", "years": 2}], None)
+    assert s["stats"]["bankruptcies"] == 1 and 0 < s["spend_mult"] <= 1
+
+
+def test_hong_kong_pension_follows_oecd_rate():
+    s = new_life(3, "HK")
+    s["age"], s["business"], s["studying"] = COUNTRIES["HK"]["retirement_age"], None, 0
+    assert COUNTRIES["HK"]["pension_ratio"] == 0.415  # OCDE, Pensions at a Glance Asia/Pacific 2024
+    assert income(s) == pytest.approx(0.415 * s["lifestyle"])
 
 
 def test_refund_never_exceeds_gifts():

@@ -54,7 +54,7 @@ def play(seed, country, strategy):
     return s
 
 
-def summary(n=100, countries=("CA", "BR")):
+def summary(n=100, countries=tuple(COUNTRIES)):
     out = {}
     for code in countries:
         for name in STRATEGIES:
@@ -63,7 +63,8 @@ def summary(n=100, countries=("CA", "BR")):
             out[(code, name)] = {
                 "median": statistics.median(finals), "p10": finals[n // 10], "p90": finals[n * 9 // 10],
                 "freedom": statistics.mean(mirror(s)["freedom_years"] / mirror(s)["years"] for s in lives),
-                "broke": sum(f < 0 for f in finals) / n,
+                # une faillite remet le patrimoine à 0 : on la compte même si la vie finit au-dessus de 0
+                "broke": sum(s["stats"]["bankruptcies"] > 0 or s["history"][-1]["net_worth"] < 0 for s in lives) / n,
             }
     return out
 
