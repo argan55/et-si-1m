@@ -390,20 +390,54 @@ const EFFECT = {
   rate_add: ["taux de l'épargne", 'pt'], inflation_add: ['inflation', 'pt'],
 }
 const num = (x) => `${x > 0 ? '+' : x < 0 ? '−' : ''}${Math.abs(x * 100).toFixed(1).replace('.', ',').replace(',0', '')}`
-const effects = (ranges) => Object.entries(ranges)
-  .map(([k, [lo, hi]]) => `${EFFECT[k][0]} ${num(lo)} à ${num(hi)} ${EFFECT[k][1]}`).join(', ')
+// Pictogramme par actualité (décoratif, masqué aux lecteurs d'écran).
+const NEWS_ICON = {
+  taux_hausse: '🏦', taux_baisse: '🏦', inflation_installee: '🛒', banques_difficulte: '⚠️', plan_relance: '🏗️',
+  recession: '📉', reprise: '📈', petrole_flambe: '🛢️', petrole_effondre: '🛢️', euphorie_tech: '🚀',
+  bulle_tech: '💥', pandemie: '🦠', monnaie_plonge: '💱', monnaie_forte: '💱', aides_logement: '🏠', taxe_immobilier: '🏠',
+}
+const GAUGE_MAX = { '%': 0.3, pt: 0.04 } // échelle des jauges : ±30 % ou ±4 pts
+const gaugePos = (x, unit) => `${50 + 50 * Math.max(-1, Math.min(1, x / GAUGE_MAX[unit]))}%`
 
-function NewsRecap({ n }) {
+// Carte d'actualité : à venir (avant d'agir) ou bilan de l'an dernier. `key` côté parent : rejoue l'animation chaque année.
+function NewsCard({ n, past }) {
+  const status = past && (n.happens ? 'confirmée' : n.overridden ? 'éclipsée' : 'démentie')
+  const real = past && n.happens
   return (
-    <div className="event news">
-      <span className="tag">Actualité · {n.kind === 'rumeur' ? 'rumeur' : 'annonce officielle'}</span>
-      <p>{n.text}</p>
-      <p className="muted small">
-        {n.happens
-          ? `Elle s'est confirmée : ${Object.entries(n.effects).map(([k, x]) => `${EFFECT[k][0]} ${num(x)} ${EFFECT[k][1]}`).join(', ')}.`
-          : n.overridden ? 'Elle a été éclipsée par un événement de marché plus fort.' : 'La rumeur ne s\'est pas confirmée.'}
+    <article className={`news-card ${n.kind} ${past ? 'past' : 'live'}`} aria-label={`Actualité : ${n.text}`}>
+      <header className="news-head">
+        {!past && <span className="live-dot" aria-hidden="true" />}
+        <span>{past ? "Bilan de l'actualité" : 'Flash actualité'}</span>
+        <span className="news-kind">{n.kind === 'rumeur' ? 'Rumeur · 1 chance sur 2' : 'Annonce officielle'}</span>
+      </header>
+      <div className="news-body">
+        <span className="news-icon" aria-hidden="true">{NEWS_ICON[n.id] ?? '📰'}</span>
+        <p className="news-title">{n.text}</p>
+        {status && <span className={`stamp ${status}`}>{status}</span>}
+      </div>
+      <ul className={`news-effects ${past && !real ? 'faded' : ''}`}>
+        {Object.entries(n.ranges).map(([k, [lo, hi]], i) => {
+          const [label, unit] = EFFECT[k]
+          const val = real ? n.effects[k] : null
+          const up = (val ?? lo + hi) > 0
+          return (
+            <li key={k} style={{ '--i': i }} className={up ? 'up' : 'down'}>
+              <span className="eff-label"><span aria-hidden="true">{up ? '▲' : '▼'}</span> {label}</span>
+              <span className="gauge" aria-hidden="true">
+                <i />
+                <b style={{ left: gaugePos(Math.min(lo, hi), unit), right: `calc(100% - ${gaugePos(Math.max(lo, hi), unit)})` }} />
+                {val != null && <em style={{ left: gaugePos(val, unit) }} />}
+              </span>
+              <span className="eff-value">{val != null ? `${num(val)} ${unit}` : `${num(lo)} à ${num(hi)} ${unit}`}</span>
+            </li>
+          )
+        })}
+      </ul>
+      <p className="muted small news-foot">
+        {!past ? `Effet attendu cette année${n.kind === 'rumeur' ? ' si la rumeur se confirme' : ''}. Vous pouvez agir avant.`
+          : real ? 'Effet réel sur votre année.' : n.overridden ? 'Éclipsée par un événement de marché plus fort.' : "La rumeur ne s'est pas confirmée : aucun effet."}
       </p>
-    </div>
+    </article>
   )
 }
 
@@ -461,7 +495,7 @@ function Year({ v, level, busy, error, retryError, onRetry, onPlay, onNew }) {
                 <p>{ly.event.text}</p>
               </div>
             )}
-            {ly.news && <NewsRecap n={ly.news} />}
+            {ly.news && <NewsCard key={`past-${ly.age}`} n={ly.news} past />}
             <p className="muted">
               Bourse : {ly.market_return >= 0 ? '+' : ''}{pct(ly.market_return)} (comme en {ly.market_year}{ly.news?.happens && ly.news.effects.stocks_add ? ', actualité comprise' : ''}) · inflation {pct(ly.inflation)}
             </p>
@@ -472,13 +506,7 @@ function Year({ v, level, busy, error, retryError, onRetry, onPlay, onNew }) {
         )}
 
         {ly && (v.news || v.pending) && <p className="eyebrow this-year">Cette année, à {v.age} ans</p>}
-        {v.news && (
-          <div className="event news">
-            <span className="tag">Actualité · {v.news.kind === 'rumeur' ? 'rumeur (se confirme une fois sur deux)' : 'annonce officielle'}</span>
-            <p>{v.news.text}</p>
-            <p className="muted small">Effet attendu cette année si elle se confirme : {effects(v.news.ranges)}.</p>
-          </div>
-        )}
+        {v.news && <NewsCard key={`live-${v.age}`} n={v.news} />}
         {v.pending && (
           <div className="event pending">
             <span className="tag">{FAMILY[v.pending.family]} · à décider</span>
