@@ -75,7 +75,11 @@ def view(s):
         "last_year": last and {**{k: last[k] for k in ("age", "inflation", "market_year", "market_return", "income", "spend", "log")},
                                "event": _event(last["event"])},
         "pending": _event(s["pending"]),
-        "history": [{"age": y["age"], "net_worth_ppp": y["net_worth_ppp"]} for y in s["history"]],
+        "history": [{"age": y["age"], "net_worth_ppp": y["net_worth_ppp"], "decided": y["decided"], "log": y["log"],
+                     "event": EVENT_BY_ID[y["event"]]["text"] if y["event"] else None,
+                     "family": EVENT_BY_ID[y["event"]]["family"] if y["event"] else None,
+                     **{k: y[k] / c["ppp_per_intl_usd"] for k in ("cash", "etf", "property", "business", "debt")}}
+                    for y in s["history"]],
         "mirror": mirror(s) if s["done"] else None,
     }
 

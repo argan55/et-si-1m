@@ -387,6 +387,7 @@ function Year({ v, busy, error, retryError, onRetry, onPlay, onNew }) {
 
   return (
     <div className="grid">
+      <div className="col">
       <section className="card status">
         <p className="eyebrow">{v.age} ans · {c.name} · {situation(v)}</p>
         <div className="networth">
@@ -394,7 +395,6 @@ function Year({ v, busy, error, retryError, onRetry, onPlay, onNew }) {
           <strong>{money(v.net_worth, c.currency)}</strong>
           <span className="muted">≈ {money(v.net_worth_ppp, 'USD')} en pouvoir d'achat</span>
         </div>
-        <Spark points={v.history} />
         <dl className="facts">
           <dt>Liquidités</dt><dd>{money(v.cash, c.currency)}</dd>
           <dt className="sub">dont fonds d'urgence</dt><dd className="sub">{money(Math.min(v.emergency_fund, Math.max(v.cash, 0)), c.currency)}</dd>
@@ -407,6 +407,11 @@ function Year({ v, busy, error, retryError, onRetry, onPlay, onNew }) {
           <dt>Famille</dt><dd>{v.partner ? 'en couple' : 'seul·e'}{v.children ? ` · ${v.children} enfant(s)` : ''}</dd>
         </dl>
       </section>
+      <section className="card chart-card">
+        <h3>Votre patrimoine au fil des années <span className="muted small">(en pouvoir d'achat)</span></h3>
+        <Chart points={v.history} start={v.prize_local / c.ppp} height={240} />
+      </section>
+      </div>
 
       <section className="card">
         {ly ? (
@@ -642,33 +647,65 @@ function Actions({ v, add, full }) {
   )
 }
 
-function Spark({ points, height = 70 }) {
-  if (points.length < 2) return null
-  return <Chart points={points} height={height} axes={false} />
-}
+// Composantes positives empilées sous la courbe du patrimoine net (la dette n'est pas empilée).
+const LAYERS = [['cash', 'Liquidités'], ['etf', 'ETF'], ['property', 'Immobilier net'], ['business', 'Entreprise']]
 
-function Chart({ points, height = 220, axes = true }) {
-  const W = 600, H = height, P = axes ? 40 : 4
-  const xs = points.map((p) => p.age), ys = points.map((p) => p.net_worth_ppp)
+function Chart({ points, start, height = 220 }) {
+  if (points.length < 2) return <p className="muted small">Le graphique apparaîtra après la première année.</p>
+  const W = 600, H = height, P = 40
+  const xs = points.map((p) => p.age)
+  const tops = points.map((p) => LAYERS.reduce((s, [k]) => s + Math.max(p[k] ?? 0, 0), 0))
+  const ys = points.map((p) => p.net_worth_ppp)
   const [x0, x1] = [Math.min(...xs), Math.max(...xs)]
-  const [y0, y1] = [Math.min(0, ...ys), Math.max(...ys, 1)]
+  const [y0, y1] = [Math.min(0, ...ys), Math.max(...ys, ...tops, start ?? 1)]
   const X = (x) => P + ((x - x0) / Math.max(x1 - x0, 1)) * (W - 2 * P)
   const Y = (y) => H - P / 2 - ((y - y0) / (y1 - y0)) * (H - 1.5 * P)
-  const d = points.map((p, i) => `${i ? 'L' : 'M'}${X(p.age).toFixed(1)},${Y(p.net_worth_ppp).toFixed(1)}`).join('')
+  const pts = (arr) => arr.map((y, i) => `${X(xs[i]).toFixed(1)},${Y(y).toFixed(1)}`)
   const short = (y) => new Intl.NumberFormat('fr-CA', { notation: 'compact', maximumFractionDigits: 1 }).format(y) + ' $'
+  let base = points.map(() => 0)
+  const areas = LAYERS.map(([k]) => {
+    const top = base.map((b, i) => b + Math.max(points[i][k] ?? 0, 0))
+    const poly = [...pts(top), ...pts(base).reverse()].join(' ')
+    base = top
+    return <polygon key={k} points={poly} className={`area ${k}`} />
+  })
+  const step = (W - 2 * P) / Math.max(x1 - x0, 1)
   return (
-    <svg className="chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Trajectoire du patrimoine net, en pouvoir d'achat">
-      {y0 < 0 && <line x1={P} x2={W - P} y1={Y(0)} y2={Y(0)} className="zero" />}
-      <path d={d} className="line" />
-      {axes && (
-        <>
-          <text x={P} y={H - 4} className="tick">{x0} ans</text>
-          <text x={W - P} y={H - 4} className="tick" textAnchor="end">{x1} ans</text>
-          <text x={4} y={Y(y1) + 4} className="tick">{short(y1)}</text>
-          <text x={4} y={Y(y0)} className="tick">{short(y0)}</text>
-        </>
-      )}
-    </svg>
+    <figure className="chart-wrap">
+      <svg className="chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Trajectoire du patrimoine net et de sa composition, en pouvoir d'achat">
+        {[0.25, 0.5, 0.75, 1].map((f) => (
+          <g key={f}>
+            <line x1={P} x2={W - P} y1={Y(y0 + f * (y1 - y0))} y2={Y(y0 + f * (y1 - y0))} className="grid-line" />
+            {f < 1 && <text x={4} y={Y(y0 + f * (y1 - y0)) + 4} className="tick">{short(y0 + f * (y1 - y0))}</text>}
+          </g>
+        ))}
+        {areas}
+        {points.map((p, i) => p.family && (
+          <line key={i} x1={X(p.age)} x2={X(p.age)} y1={P / 2} y2={Y(y0)} className={`event-mark ${p.family}`} />
+        ))}
+        {start != null && <line x1={P} x2={W - P} y1={Y(start)} y2={Y(start)} className="start-line" />}
+        {y0 < 0 && <line x1={P} x2={W - P} y1={Y(0)} y2={Y(0)} className="zero" />}
+        <polyline points={pts(ys).join(' ')} className="line" />
+        {points.map((p, i) => p.decided && <circle key={i} cx={X(p.age)} cy={Y(p.net_worth_ppp)} r="6" className="decision" />)}
+        {points.map((p, i) => (
+          <rect key={i} x={X(p.age) - step / 2} y={0} width={step} height={H} className="hit">
+            <title>{[`${p.age} ans · ${money(p.net_worth_ppp, 'USD')}`, p.event, ...(p.log ?? [])].filter(Boolean).join('\n')}</title>
+          </rect>
+        ))}
+        <text x={P} y={H - 4} className="tick">{x0} ans</text>
+        <text x={W - P} y={H - 4} className="tick" textAnchor="end">{x1} ans</text>
+        <text x={4} y={Y(y1) + 4} className="tick">{short(y1)}</text>
+        <text x={4} y={Y(y0)} className="tick">{short(y0)}</text>
+      </svg>
+      <figcaption className="legend small">
+        <span><i className="line" />Patrimoine net</span>
+        <span><i className="decision" />Vos décisions</span>
+        {start != null && <span><i className="start-line" />Montant de départ</span>}
+        <span><i className="event-mark" />Événements</span>
+        {LAYERS.map(([k, l]) => <span key={k}><i className={`area ${k}`} />{l}</span>)}
+        <span className="muted">Survolez une année pour le détail.</span>
+      </figcaption>
+    </figure>
   )
 }
 
@@ -715,7 +752,7 @@ function Mirror({ v, onReplay, onNew, seed }) {
       <p className="eyebrow">Miroir · {c.name}, de {v.start_age} à {v.age} ans</p>
       <h2>Votre vie s'achève à {v.age} ans.</h2>
       <p className="muted">Patrimoine net au fil des années, en pouvoir d'achat (dollars US équivalents).</p>
-      <Chart points={m.trajectory} />
+      <Chart points={v.history} start={v.prize_local / c.ppp} />
       <dl className="stats">
         <div><dt>Patrimoine laissé</dt><dd>{money(m.final_net_worth_ppp, 'USD')}</dd></div>
         <div><dt>Au plus haut</dt><dd>{money(m.peak_net_worth_ppp, 'USD')}</dd></div>

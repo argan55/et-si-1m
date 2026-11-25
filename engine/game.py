@@ -489,7 +489,7 @@ def _step(s, actions, choice):
         "age": s["age"], "net_worth": nw, "net_worth_ppp": nw / c["ppp_per_intl_usd"],
         "cash": s["cash"], "etf": s["etf"], "property": sum(h["value"] - h["mortgage"] for h in s["homes"]),
         "business": biz, "debt": s["debt"], "risky": s["etf"] + rentals + biz,
-        "event": ev["id"] if ev else None, "log": s["log"], **fin,
+        "event": ev["id"] if ev else None, "log": s["log"], "decided": bool(actions) or choice is not None, **fin,
     })
     s["age"] += 1
     s["year"] += 1
