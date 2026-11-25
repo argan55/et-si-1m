@@ -13,6 +13,9 @@ Le message du jeu : **1 M$ ne vaut pas la même chose pour tout le monde**.
 - **Deux modes** :
   - *jeu* : une vie tirée au sort, avec 1 M$ US ;
   - *réaliste* : vous saisissez votre pays, votre âge, votre salaire, vos dettes, votre famille et le montant reçu.
+- **Deux niveaux**, choisis à l'accueil, avec le même moteur :
+  - *Découverte* : le jeu simple, avec le graphique du patrimoine (composition, décisions, événements, montant de départ) ;
+  - *Avancé* : en plus, « L'économie de votre vie » : ce qui a fait bouger le patrimoine (décisions, événements, bourse, immobilier, épargne…) et l'année historique rejouée (bourse, inflation, épargne, dollar US, immobilier).
 - **7 briques** : investir, immobilier, voyager, rembourser ses dettes, étudier à l'étranger, entreprendre, donner.
 - **43 événements.**
 - **Miroir à 4 axes** : Vivre ↔ Bâtir, Sécurité ↔ Aventure, Moi ↔ Les autres, Racines ↔ Ailleurs.
