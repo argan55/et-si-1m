@@ -44,8 +44,9 @@ function profileFromUrl() {
   return { ...p, age: Number(p.age), salary: Number(p.salary), debt: Number(p.debt || 0), amount: Number(p.amount),
     partner: p.partner === '1', children: Number(p.children || 0) }
 }
-function urlFor(seed, country, profile) {
+function urlFor(seed, country, profile, level) {
   const q = new URLSearchParams({ seed })
+  if (level === 'avance') q.set('niveau', 'avance')
   if (profile) {
     for (const [name, k] of Object.entries(PROFILE_PARAMS)) q.set(name, k === 'partner' ? (profile.partner ? 1 : 0) : profile[k])
   } else if (country) q.set('pays', country)
@@ -54,6 +55,8 @@ function urlFor(seed, country, profile) {
 
 const urlSeed = Number(params.get('seed')) || null
 const urlProfile = profileFromUrl()
+// Niveau d'affichage : 'decouverte' (jeu de base) ou 'avance' (outils en plus) ; le moteur est le même.
+const urlLevel = params.get('niveau') === 'avance' ? 'avance' : 'decouverte'
 const saved = loadSave()
 // Un lien partagé vers une autre vie l'emporte sur la sauvegarde.
 const resume = saved && Number.isInteger(saved.seed) && Array.isArray(saved.turns)
@@ -66,6 +69,7 @@ export default function App() {
   const [profile, setProfile] = useState(initialProfile)
   // null : écran d'accueil ; 'jeu' : vie tirée au sort ; 'realiste' : le joueur saisit sa situation
   const [mode, setMode] = useState(() => (resume || urlSeed ? (initialProfile ? 'realiste' : 'jeu') : null))
+  const [level, setLevel] = useState(() => resume?.level ?? urlLevel)
   const [turns, setTurns] = useState(() => resume?.turns ?? [])
   const [view, setView] = useState(null)
   const [started, setStarted] = useState(() => resume?.started ?? false)
@@ -130,13 +134,13 @@ export default function App() {
 
   useEffect(() => {
     if (!ready) return
-    history.replaceState(null, '', urlFor(seed, country, profile))
+    history.replaceState(null, '', urlFor(seed, country, profile, level))
     load(turns)
   }, [seed, ready, JSON.stringify(profile)]) // eslint-disable-line react-hooks/exhaustive-deps -- les décisions sont rejouées une fois au chargement
 
   useEffect(() => {
-    if (ready) writeSave({ seed, country, profile, turns, started })
-  }, [ready, seed, country, profile, turns, started])
+    if (ready) writeSave({ seed, country, profile, turns, started, level })
+  }, [ready, seed, country, profile, turns, started, level])
 
   function newLife() {
     setTurns([])
@@ -195,7 +199,7 @@ export default function App() {
     setBusy(false)
   }
 
-  if (!mode) return <Shell wakeMessage={wakeMessage}><Landing onGame={() => setMode('jeu')} onReal={() => setMode('realiste')} /></Shell>
+  if (!mode) return <Shell wakeMessage={wakeMessage}><Landing level={level} onLevel={setLevel} onGame={() => setMode('jeu')} onReal={() => setMode('realiste')} /></Shell>
   if (mode === 'realiste' && !profile) return <Shell onHome={home} wakeMessage={wakeMessage}><ProfileForm onSubmit={submitProfile} /></Shell>
   if (!view) return <Shell onHome={home} wakeMessage={wakeMessage}>{retryError ? (
       <div className="error-retry">
@@ -214,17 +218,17 @@ export default function App() {
   if (view.done)
     return (
       <Shell onHome={home} wakeMessage={wakeMessage}>
-        <Mirror v={view} onReplay={replayLife} onNew={home} seed={seed} />
+        <Mirror v={view} level={level} onReplay={replayLife} onNew={home} seed={seed} />
       </Shell>
     )
   return (
     <Shell onHome={home} wakeMessage={wakeMessage}>
-      <Year v={view} busy={busy} error={error} retryError={retryError} onRetry={() => advance(retryError.first, retryError.years)} onPlay={advance} onNew={home} />
+      <Year v={view} level={level} busy={busy} error={error} retryError={retryError} onRetry={() => advance(retryError.first, retryError.years)} onPlay={advance} onNew={home} />
     </Shell>
   )
 }
 
-function Landing({ onGame, onReal }) {
+function Landing({ level, onLevel, onGame, onReal }) {
   return (
     <section className="card draw">
       <p className="eyebrow">Un jeu sur l'argent et le hasard</p>
@@ -232,6 +236,16 @@ function Landing({ onGame, onReal }) {
       <p className="lead">
         Le même million ne vaut pas la même chose selon le pays, l'âge ou le salaire. Vivez une vie année après année, puis regardez ce que vous en avez fait.
       </p>
+      <p className="eyebrow step">1. Niveau</p>
+      <div className="level" role="radiogroup" aria-label="Niveau">
+        {[['decouverte', 'Découverte', 'Le jeu simple : vos décisions et votre patrimoine.'],
+          ['avance', 'Avancé', "En plus : l'économie de votre vie (bourse, inflation, taux, change, immobilier)."]].map(([k, l, d]) => (
+          <button key={k} role="radio" aria-checked={level === k} className={level === k ? 'selected' : ''} onClick={() => onLevel(k)}>
+            <strong>{l}</strong> <span className="muted small">{d}</span>
+          </button>
+        ))}
+      </div>
+      <p className="eyebrow step">2. Votre vie</p>
       <div className="choices">
         <button className="choice" onClick={onGame}>
           <strong>Une vie tirée au sort</strong>
@@ -370,7 +384,7 @@ function incomeLabel(v) {
   return v.retired ? 'Pension' : 'Salaire'
 }
 
-function Year({ v, busy, error, retryError, onRetry, onPlay, onNew }) {
+function Year({ v, level, busy, error, retryError, onRetry, onPlay, onNew }) {
   const c = v.country
   const [draft, setDraft] = useState([])
   const [choice, setChoice] = useState(null)
@@ -410,7 +424,7 @@ function Year({ v, busy, error, retryError, onRetry, onPlay, onNew }) {
       <section className="card chart-card">
         <h3>Votre patrimoine au fil des années <span className="muted small">(en pouvoir d'achat)</span></h3>
         <Chart points={v.history} start={v.prize_local / c.ppp} height={240} />
-        <Economy points={v.history} />
+        {level === 'avance' && <Economy points={v.history} />}
       </section>
       </div>
 
@@ -728,7 +742,7 @@ function Economy({ points }) {
   const X = (x) => P + ((x - x0) / Math.max(x1 - x0, 1)) * (W - 2 * P)
   const step = (W - 2 * P) / Math.max(x1 - x0, 1)
   return (
-    <details className="economy">
+    <details className="economy" open>
       <summary>Économie de votre vie</summary>
       <p className="muted small">L'année historique rejouée chaque année, avec les chocs des événements. Variation annuelle.</p>
       {ECONOMY.map(([label, get, shock]) => {
@@ -795,7 +809,7 @@ function Axis({ left, right, value, sentences }) {
   )
 }
 
-function Mirror({ v, onReplay, onNew, seed }) {
+function Mirror({ v, level, onReplay, onNew, seed }) {
   const m = v.mirror
   const c = v.country
   const [copied, setCopied] = useState(false)
@@ -805,7 +819,7 @@ function Mirror({ v, onReplay, onNew, seed }) {
       <h2>Votre vie s'achève à {v.age} ans.</h2>
       <p className="muted">Patrimoine net au fil des années, en pouvoir d'achat (dollars US équivalents).</p>
       <Chart points={v.history} start={v.prize_local / c.ppp} />
-      <Economy points={v.history} />
+      {level === 'avance' && <Economy points={v.history} />}
       <dl className="stats">
         <div><dt>Patrimoine laissé</dt><dd>{money(m.final_net_worth_ppp, 'USD')}</dd></div>
         <div><dt>Au plus haut</dt><dd>{money(m.peak_net_worth_ppp, 'USD')}</dd></div>
