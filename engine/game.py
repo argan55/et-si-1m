@@ -440,7 +440,10 @@ def _finances(s, yr, c):
         s["salary"] *= 1 + c["salary_growth_real"]
         s["lifestyle"] = s["salary"]
     return {"inflation": infl, "market_year": m["year"], "market_return": m["stocks_real"],
-            "income": inc, "spend": spend}
+            "income": inc, "spend": spend,
+            # année historique rejouée (avant chocs) et chocs d'événements de l'année, pour l'affichage
+            "economy": {k: m[k] for k in ("stocks_real", "inflation", "cash_real", "fx_real", "home_real")},
+            "shocks": {k: yr[k] for k in ("rate_add", "inflation_add", "fx_add", "home_add")}}
 
 
 def step(s, actions=(), choice=None):
