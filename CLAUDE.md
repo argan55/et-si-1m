@@ -1,4 +1,4 @@
-# Jeu 1 M$ : « Et si… ? » (sous-titre : « 1 M$, une vie »)
+﻿# Jeu 1 M$ : « Et si… ? » (sous-titre : « 1 M$, une vie »)
 
 Jeu de simulation dans le navigateur, inspiré des mécaniques de *1 in 8 Billion* (1in8b.life) : le joueur reçoit 1 M$ au cours d'une vie tirée au sort et décide année par année quoi en faire. Message du jeu : **1 M$ ne vaut pas la même chose pour tout le monde**. Ne pas reprendre le nom ni le design du jeu d'origine. Ce n'est pas un conseil financier (l'indiquer dans l'interface).
 
@@ -166,7 +166,7 @@ _À mettre à jour à la fin de chaque étape._
   - Interface : encadré « Actualité » avant d'agir (texte, type, effet attendu) et bilan l'année suivante (effets réels ou « rumeur non confirmée ») ; la ligne « Bourse » inclut le choc d'actualité.
   - Équilibrage : plages ajustées pour un choc moyen ≈ 0 par facteur. Tout en ETF, 400 vies : écart de médiane Avancé/Découverte −4 % (Canada), −3 % (Mexique), 0 % (États-Unis), mais −13 % à Hong Kong (bourse très volatile : le risque ajouté pèse plus ; pas corrigé).
   - Les sources des effets sont des ordres de grandeur (≈) à vérifier, listés dans `data/news.json`.
-  - 82 tests pytest. En local, `uvicorn --reload` se bloque au rechargement sous Windows : relancer l'API à la main après une modification.
+  - 81 tests pytest. En local, `uvicorn --reload` se bloque au rechargement sous Windows : relancer l'API à la main après une modification.
 
 <!-- delegation-kit:start -->
 ## Delegation setup for this project (jeu-1m, "Et si… ?")
