@@ -75,3 +75,18 @@ Le moteur représente la retraite par un seul chiffre : la pension vaut `pension
 | Old Age Living Allowance (OALA) | 4 250 HK$/mois dès 65 ans, si le patrimoine d'une personne seule est sous 406 000 HK$ (1er février 2025) | [SWD, OALA](https://swd.gov.hk/oala/index_e.html) | non représentée (condition de patrimoine) |
 
 Limites : le taux OCDE suppose une carrière complète et ne dépend pas du salaire dans le moteur. Comme le revenu cotisable du MPF est plafonné, la vraie pension des hauts salaires est plus faible (l'OCDE 2022 donnait 26,8 % à 2 fois le salaire moyen).
+
+## `news.json` : actualités du niveau Avancé
+
+Titres écrits à la main (pas de vraies dépêches). Chaque effet est une plage, ajoutée à l'année historique rejouée. Les sources de chaque actualité sont dans `news.json` (bloc `sources`), vérifiées le 2026-11-25 :
+
+- **Taux directeurs** : Bernanke et Kuttner (2005) pour la bourse (≈ 1 % par surprise de 0,25 pt) ; FMI, WEO avril 2024 (chap. 2) et Banque du Canada (2026) pour l'immobilier (−1 à −4,5 % par point).
+- **Crise bancaire** : Reinhart et Rogoff (2009) : actions −55 % en 3,5 ans, immobilier −35 % en 6 ans.
+- **Pétrole** : FMI WP/17/196 (2017) : +10 % sur le pétrole ≈ +0,4 pt d'inflation.
+- **Bulle technologique** : dot-com 2000-2002 (Nasdaq −80 %, S&P 500 −44 à −50 %).
+- **Pandémie** : S&P 500 −34 % en février-mars 2020, puis reprise.
+- **Monnaie** : réal brésilien −33 à −50 % (2015), peso mexicain −25 % (2008).
+- **Taxe immobilière** : taxe sur les acheteurs étrangers à Vancouver (2016), prix −6 % de plus dans les quartiers exposés (UBC Sauder).
+
+Encore estimés (≈, règles de jeu) : inflation qui s'installe, plan de relance, récession, reprise, euphorie technologique, aides au logement, monnaie qui se renforce, effet boursier du pétrole pour les pays exportateurs, droits de timbre de Hong Kong. Les plages ont aussi été ajustées pour que le choc moyen de chaque facteur soit ≈ 0 (équilibrage).
+
