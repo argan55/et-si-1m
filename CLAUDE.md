@@ -1,4 +1,4 @@
-﻿# Jeu 1 M$ : « Et si… ? » (sous-titre : « 1 M$, une vie »)
+# Jeu 1 M$ : « Et si… ? » (sous-titre : « 1 M$, une vie »)
 
 Jeu de simulation dans le navigateur, inspiré des mécaniques de *1 in 8 Billion* (1in8b.life) : le joueur reçoit 1 M$ au cours d'une vie tirée au sort et décide année par année quoi en faire. Message du jeu : **1 M$ ne vaut pas la même chose pour tout le monde**. Ne pas reprendre le nom ni le design du jeu d'origine. Ce n'est pas un conseil financier (l'indiquer dans l'interface).
 
