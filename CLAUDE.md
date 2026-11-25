@@ -166,7 +166,10 @@ _À mettre à jour à la fin de chaque étape._
   - Interface : encadré « Actualité » avant d'agir (texte, type, effet attendu) et bilan l'année suivante (effets réels ou « rumeur non confirmée ») ; la ligne « Bourse » inclut le choc d'actualité.
   - Équilibrage : plages ajustées pour un choc moyen ≈ 0 par facteur. Tout en ETF, 400 vies : écart de médiane Avancé/Découverte −4 % (Canada), −3 % (Mexique), 0 % (États-Unis), mais −13 % à Hong Kong (bourse très volatile : le risque ajouté pèse plus ; pas corrigé).
   - Les sources des effets sont des ordres de grandeur (≈) à vérifier, listés dans `data/news.json`.
-  - 81 tests pytest. En local, `uvicorn --reload` se bloque au rechargement sous Windows : relancer l'API à la main après une modification.
+  - 81 tests pytest. En local, `uvicorn --reload` se bloque au rechargement sous Windows : relancer l'API à la main après une modification. Le serveur Vite peut aussi rater un changement de CSS (OneDrive) : relancer `npm run dev`.
+- 2026-11-25 : sources des actualités vérifiées (`fb6b43b`, `data/news.json` et `data/SOURCES.md`) ; cartes d'actualité visuelles et animées (`5f40860`). « Réagir à l'actualité » : plan écrit, mis en attente.
+- 2026-11-25 : **`avance-economie` fusionnée dans `main`** (sans commit de fusion), README à jour. Vérifié : 81 tests pytest, build Vite, une vie complète jusqu'au miroir dans chaque niveau dans le navigateur (Avancé : répartition, 3 décisions, 6 actualités ; Découverte : ni actualité ni panneau), sans erreur.
+  - Prochaine étape : publication sur Render (services à créer par l'utilisateur), puis test de la démo en ligne. Pistes Avancé : réagir à l'actualité, actions individuelles (point 3), équilibrage de Hong Kong.
 
 <!-- delegation-kit:start -->
 ## Delegation setup for this project (jeu-1m, "Et si… ?")

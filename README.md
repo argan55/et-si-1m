@@ -13,9 +13,13 @@ Le message du jeu : **1 M$ ne vaut pas la même chose pour tout le monde**.
 - **Deux modes** :
   - *jeu* : une vie tirée au sort, avec 1 M$ US ;
   - *réaliste* : vous saisissez votre pays, votre âge, votre salaire, vos dettes, votre famille et le montant reçu.
-- **Deux niveaux**, choisis à l'accueil, avec le même moteur :
+- **Deux niveaux**, choisis à l'accueil :
   - *Découverte* : le jeu simple, avec le graphique du patrimoine (composition, décisions, événements, montant de départ) ;
-  - *Avancé* : en plus, « L'économie de votre vie » : ce qui a fait bouger le patrimoine (décisions, événements, bourse, immobilier, épargne…) et l'année historique rejouée (bourse, inflation, épargne, dollar US, immobilier).
+  - *Avancé* : en plus,
+    - des **actualités** une année sur deux (16 écrites à la main : taux, crise bancaire, pétrole, pandémie…), annonces sûres ou rumeurs qui ne se confirment qu'une fois sur deux, qui font vraiment bouger l'économie de l'année ; effets sourcés dans `data/news.json` ;
+    - **3 décisions par an** et une **répartition automatique** ETF / liquidités, rééquilibrée chaque année ;
+    - « **L'économie de votre vie** » : ce qui a fait bouger le patrimoine (décisions, événements, bourse, immobilier, épargne…) et l'année historique rejouée (bourse, inflation, épargne, dollar US, immobilier).
+  - Le moteur est le même. En Découverte, une graine donne toujours la même vie ; en Avancé, les actualités la font diverger.
 - **7 briques** : investir, immobilier, voyager, rembourser ses dettes, étudier à l'étranger, entreprendre, donner.
 - **43 événements.**
 - **Miroir à 4 axes** : Vivre ↔ Bâtir, Sécurité ↔ Aventure, Moi ↔ Les autres, Racines ↔ Ailleurs.
