@@ -193,3 +193,6 @@ input, select { font: inherit; padding: 8px; border-radius: 8px; border: 1px sol
 .eyebrow.step { margin: 20px 0 0; }
 .level + .eyebrow.step + .choices { margin-top: 8px; }
 .level { margin-top: 8px; }
+.event.news { border-color: var(--marches); }
+.event.news .tag { color: var(--marches); }
+.eyebrow.this-year { margin-top: 20px; }

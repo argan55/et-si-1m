@@ -14,6 +14,7 @@ COUNTRIES = _json("countries.json")["countries"]
 RULES = _json("rules.json")["rules"]
 EVENTS = _json("events.json")["events"]
 EVENT_BY_ID = {e["id"]: e for e in EVENTS}
+NEWS = _json("news.json")  # actualités du niveau Avancé
 
 # Historique annuel par pays : une année tirée rejoue ensemble bourse, inflation, taux, change et immobilier.
 MARKET = {}

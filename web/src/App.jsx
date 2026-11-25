@@ -239,7 +239,7 @@ function Landing({ level, onLevel, onGame, onReal }) {
       <p className="eyebrow step">1. Niveau</p>
       <div className="level" role="radiogroup" aria-label="Niveau">
         {[['decouverte', 'Découverte', 'Le jeu simple : vos décisions et votre patrimoine.'],
-          ['avance', 'Avancé', "En plus : 3 décisions par an, une répartition automatique de votre argent et l'économie de votre vie."]].map(([k, l, d]) => (
+          ['avance', 'Avancé', "En plus : des actualités qui font bouger l'économie, 3 décisions par an, une répartition automatique et l'économie de votre vie."]].map(([k, l, d]) => (
           <button key={k} role="radio" aria-checked={level === k} className={level === k ? 'selected' : ''} onClick={() => onLevel(k)}>
             <strong>{l}</strong> <span className="muted small">{d}</span>
           </button>
@@ -384,6 +384,29 @@ function incomeLabel(v) {
   return v.retired ? 'Pension' : 'Salaire'
 }
 
+// Actualités (niveau Avancé) : effets en % (bourse, immobilier, dollar) ou en points (taux, inflation).
+const EFFECT = {
+  stocks_add: ['bourse', '%'], home_add: ['immobilier', '%'], fx_add: ['dollar US', '%'],
+  rate_add: ["taux de l'épargne", 'pt'], inflation_add: ['inflation', 'pt'],
+}
+const num = (x) => `${x > 0 ? '+' : x < 0 ? '−' : ''}${Math.abs(x * 100).toFixed(1).replace('.', ',').replace(',0', '')}`
+const effects = (ranges) => Object.entries(ranges)
+  .map(([k, [lo, hi]]) => `${EFFECT[k][0]} ${num(lo)} à ${num(hi)} ${EFFECT[k][1]}`).join(', ')
+
+function NewsRecap({ n }) {
+  return (
+    <div className="event news">
+      <span className="tag">Actualité · {n.kind === 'rumeur' ? 'rumeur' : 'annonce officielle'}</span>
+      <p>{n.text}</p>
+      <p className="muted small">
+        {n.happens
+          ? `Elle s'est confirmée : ${Object.entries(n.effects).map(([k, x]) => `${EFFECT[k][0]} ${num(x)} ${EFFECT[k][1]}`).join(', ')}.`
+          : n.overridden ? 'Elle a été éclipsée par un événement de marché plus fort.' : 'La rumeur ne s\'est pas confirmée.'}
+      </p>
+    </div>
+  )
+}
+
 function Year({ v, level, busy, error, retryError, onRetry, onPlay, onNew }) {
   const c = v.country
   const [draft, setDraft] = useState([])
@@ -438,8 +461,9 @@ function Year({ v, level, busy, error, retryError, onRetry, onPlay, onNew }) {
                 <p>{ly.event.text}</p>
               </div>
             )}
+            {ly.news && <NewsRecap n={ly.news} />}
             <p className="muted">
-              Bourse : {ly.market_return >= 0 ? '+' : ''}{pct(ly.market_return)} (comme en {ly.market_year}) · inflation {pct(ly.inflation)}
+              Bourse : {ly.market_return >= 0 ? '+' : ''}{pct(ly.market_return)} (comme en {ly.market_year}{ly.news?.happens && ly.news.effects.stocks_add ? ', actualité comprise' : ''}) · inflation {pct(ly.inflation)}
             </p>
             {ly.log.length > 0 && <ul className="log">{ly.log.map((l, i) => <li key={i}>{l}</li>)}</ul>}
           </>
@@ -447,6 +471,14 @@ function Year({ v, level, busy, error, retryError, onRetry, onPlay, onNew }) {
           <p className="eyebrow">Première année : le 1 M$ est sur votre compte.</p>
         )}
 
+        {ly && (v.news || v.pending) && <p className="eyebrow this-year">Cette année, à {v.age} ans</p>}
+        {v.news && (
+          <div className="event news">
+            <span className="tag">Actualité · {v.news.kind === 'rumeur' ? 'rumeur (se confirme une fois sur deux)' : 'annonce officielle'}</span>
+            <p>{v.news.text}</p>
+            <p className="muted small">Effet attendu cette année si elle se confirme : {effects(v.news.ranges)}.</p>
+          </div>
+        )}
         {v.pending && (
           <div className="event pending">
             <span className="tag">{FAMILY[v.pending.family]} · à décider</span>
@@ -730,7 +762,7 @@ function Chart({ points, start, height = 220, W = 600 }) {
         {points.map((p, i) => p.decided && <circle key={i} cx={X(p.age)} cy={Y(p.net_worth_ppp)} r="6" className="decision" />)}
         {points.map((p, i) => (
           <rect key={i} x={X(p.age) - step / 2} y={0} width={step} height={H} className="hit">
-            <title>{[`${p.age} ans · ${money(p.net_worth_ppp, 'USD')}`, p.event, ...(p.log ?? [])].filter(Boolean).join('\n')}</title>
+            <title>{[`${p.age} ans · ${money(p.net_worth_ppp, 'USD')}`, p.news && `Actualité : ${p.news.text}${p.news.happens ? '' : ' (non confirmée)'}`, p.event, ...(p.log ?? [])].filter(Boolean).join('\n')}</title>
           </rect>
         ))}
         <text x={P} y={H - 4} className="tick">{x0} ans</text>

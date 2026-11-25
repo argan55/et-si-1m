@@ -12,10 +12,11 @@ from statistics import NormalDist
 
 import numpy as np
 
-from .data import COUNTRIES, EVENT_BY_ID, EVENTS, MARKET, RULES
+from .data import COUNTRIES, EVENT_BY_ID, EVENTS, MARKET, NEWS, RULES
 
 # flux d'aléa indépendants
 _LIFE, _EVENT, _MARKET, _BUSINESS = range(4)
+_NEWS = 4  # actualités du niveau Avancé : flux à part, ne touche aucun autre tirage
 COUNTERS = {"aventure", "abroad", "angel", "cosigned", "autres"}
 _FLOORED = {"angel", "cosigned", "abroad"}  # compteurs d'état, jamais négatifs
 _BY_RETURN = {code: sorted(rows, key=lambda r: r["stocks_real"]) for code, rows in MARKET.items()}
@@ -435,7 +436,7 @@ def _finances(s, yr, c):
     if s["cash"] > 0:
         # rendement réel historique de l'épargne, corrigé des chocs de taux et d'inflation de l'année
         s["cash"] *= (1 + m["cash_real"] + yr["rate_add"]) * (1 + m["inflation"]) / (1 + infl)
-    s["etf"] *= 1 + m["stocks_real"]
+    s["etf"] *= 1 + m["stocks_real"] + yr["stocks_add"]
     gains["savings"], gains["stocks"] = s["cash"] - cash0, s["etf"] - etf0
     s["fx"] *= 1 + m["fx_real"] + yr["fx_add"]
     s["cash"] += flow
@@ -461,7 +462,7 @@ def _finances(s, yr, c):
             "income": inc, "spend": spend,
             # année historique rejouée (avant chocs) et chocs d'événements de l'année, pour l'affichage
             "economy": {k: m[k] for k in ("stocks_real", "inflation", "cash_real", "fx_real", "home_real")},
-            "shocks": {k: yr[k] for k in ("rate_add", "inflation_add", "fx_add", "home_add")},
+            "shocks": {k: yr[k] for k in ("rate_add", "inflation_add", "fx_add", "home_add", "stocks_add")},
             "gains": gains}
 
 
@@ -474,6 +475,23 @@ def step(s, actions=(), choice=None):
         s.clear()
         s.update(backup)
         raise
+
+
+def news_of_year(s):
+    """Niveau Avancé : l'actualité de l'année qui va être jouée, ou None. Ne dépend que de la graine, de l'année et du pays.
+
+    Renvoie aussi ce que le joueur ignore encore : si la rumeur se réalise et la taille tirée des effets."""
+    if s["level"] != "avance":
+        return None
+    rng = _rng(s["seed"], _NEWS, s["year"])
+    if rng.random() >= NEWS["rules"]["news_prob"]:
+        return None
+    pool = [n for n in NEWS["news"] if s["country"] in n.get("countries", COUNTRIES)]
+    n = pool[int(rng.integers(len(pool)))]
+    ranges = n.get("effects_by_country", {}).get(s["country"], n["effects"])
+    happens = n["kind"] == "annonce" or bool(rng.random() < NEWS["rules"]["rumor_prob"])
+    return {"id": n["id"], "kind": n["kind"], "text": n["text"], "ranges": ranges, "happens": happens,
+            "effects": {k: float(rng.uniform(lo, hi)) for k, (lo, hi) in sorted(ranges.items())}}
 
 
 def max_actions(s):
@@ -501,8 +519,9 @@ def _step(s, actions, choice):
         raise ValueError("Cette vie est terminée.")
     c = COUNTRIES[s["country"]]
     yr = {"income_mult": 1.0, "rent_mult": 1.0, "inflation_add": 0.0, "rate_add": 0.0,
-          "fx_add": 0.0, "home_add": 0.0, "market": None}
+          "fx_add": 0.0, "home_add": 0.0, "stocks_add": 0.0, "market": None}
     s["log"] = []
+    news = news_of_year(s)
     nw0 = net_worth(s)  # pour la décomposition de la variation du patrimoine (affichage seulement)
     if s["pending"]:
         opts = EVENT_BY_ID[s["pending"]]["choices"]
@@ -525,6 +544,12 @@ def _step(s, actions, choice):
         s["pending"] = ev["id"]
     elif ev:
         apply_effects(s, ev.get("effects_by_country", {}).get(s["country"], ev["effects"]), yr)
+    if news and news["happens"]:
+        if yr["market"] is None:  # pas cumulé avec un krach ou une année record d'événement
+            for k, v in news["effects"].items():
+                yr[k] += v
+        else:
+            news = {**news, "happens": False, "overridden": True}
 
     nw2 = net_worth(s)
     fin = _finances(s, yr, c)
@@ -537,7 +562,7 @@ def _step(s, actions, choice):
         "age": s["age"], "net_worth": nw, "net_worth_ppp": nw / c["ppp_per_intl_usd"],
         "cash": s["cash"], "etf": s["etf"], "property": sum(h["value"] - h["mortgage"] for h in s["homes"]),
         "business": biz, "debt": s["debt"], "risky": s["etf"] + rentals + biz,
-        "event": ev["id"] if ev else None, "log": s["log"], "decided": bool(actions) or choice is not None, **fin,
+        "news": news, "event": ev["id"] if ev else None, "log": s["log"], "decided": bool(actions) or choice is not None, **fin,
     })
     s["age"] += 1
     s["year"] += 1

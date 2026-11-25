@@ -41,7 +41,7 @@ def test_economy_in_history_and_api():
     s, turns = bot_turns(1, "BR")
     y = s["history"][0]
     assert set(y["economy"]) == {"stocks_real", "inflation", "cash_real", "fx_real", "home_real"}
-    assert set(y["shocks"]) == {"rate_add", "inflation_add", "fx_add", "home_add"}
+    assert set(y["shocks"]) == {"rate_add", "inflation_add", "fx_add", "home_add", "stocks_add"}
     assert y["economy"]["stocks_real"] == y["market_return"]
     r = TestClient(app).post("/api/play", json={"seed": 1, "country": "BR", "turns": turns[:5]})
     assert r.status_code == 200

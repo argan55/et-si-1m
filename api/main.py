@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 from engine import mirror, replay
 from engine.data import COUNTRIES, EVENT_BY_ID, RULES
-from engine.game import PROFILE_LIMITS, available, max_actions, emergency_fund, net_worth, retired, spending, usd, working
+from engine.game import PROFILE_LIMITS, available, max_actions, news_of_year, emergency_fund, net_worth, retired, spending, usd, working
 
 app = FastAPI(title="Et si… ? (1 M$, une vie)")
 
@@ -50,6 +50,12 @@ def _event(eid):
     return {"id": eid, "family": e["family"], "text": e["text"], "choices": [o["label"] for o in e.get("choices", [])]}
 
 
+def _news_ahead(s):
+    """Actualité de l'année à venir, sans ce que le joueur ne peut pas savoir (réalisation, taille de l'effet)."""
+    n = None if s["done"] else news_of_year(s)
+    return n and {k: n[k] for k in ("id", "kind", "text", "ranges")}
+
+
 def view(s):
     c = COUNTRIES[s["country"]]
     last = s["history"][-1] if s["history"] else None
@@ -71,17 +77,21 @@ def view(s):
         "prize_local": s["profile"]["amount"] if s["profile"] else RULES["prize_usd"] * c["fx_per_usd"],
         "age": s["age"], "start_age": s["start_age"], "done": s["done"],
         "level": s["level"], "max_actions": max_actions(s), "target": s["target"],
+        "news": _news_ahead(s),
         "working": working(s), "salary": s["salary"], "lifestyle": s["lifestyle"],
         "partner": s["partner"], "children": s["children"],
         "cash": s["cash"], "etf": s["etf"], "debt": s["debt"], "homes": s["homes"],
         "net_worth": net_worth(s), "net_worth_ppp": net_worth(s) / c["ppp_per_intl_usd"],
         "spending": spending(s), "emergency_fund": emergency_fund(s), "available": available(s),
-        "last_year": last and {**{k: last[k] for k in ("age", "inflation", "market_year", "market_return", "income", "spend", "log")},
-                               "event": _event(last["event"])},
+        "last_year": last and {**{k: last[k] for k in ("age", "inflation", "market_year", "market_return", "income", "spend", "log", "news")},
+                               "event": _event(last["event"]),
+                               # rendement réellement subi : année historique + choc d'actualité (0 en Découverte)
+                               "market_return": last["market_return"] + last["shocks"]["stocks_add"]},
         "pending": _event(s["pending"]),
         "history": [{"age": y["age"], "net_worth_ppp": y["net_worth_ppp"], "decided": y["decided"], "log": y["log"],
                      "event": EVENT_BY_ID[y["event"]]["text"] if y["event"] else None,
                      "family": EVENT_BY_ID[y["event"]]["family"] if y["event"] else None,
+                     "news": y["news"] and {"text": y["news"]["text"], "happens": y["news"]["happens"]},
                      "economy": y["economy"], "shocks": y["shocks"], "market_year": y["market_year"],
                      "breakdown": {k: v / c["ppp_per_intl_usd"] for k, v in y["breakdown"].items()},
                      **{k: y[k] / c["ppp_per_intl_usd"] for k in ("cash", "etf", "property", "business", "debt")}}
