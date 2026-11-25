@@ -152,6 +152,10 @@ _À mettre à jour à la fin de chaque étape._
   - Pas testé dans le navigateur : le cas 4xx (sauvegarde illisible) et le délai de 90 s.
   - Prochaine étape : étape 3b, publication de la démo sur Render (à valider).
 
+- 2026-11-24 : tests de `_amount` (`tests/test_amount.py`, 3 tests). Délégation Cline en échec (`cline_timeout`, aucun fichier écrit, branche abandonnée), tests écrits par Claude. 46 tests pytest passent. `tests/test_amortize.py` reste non commité.
+- 2026-11-24 : nouvel essai Cline sur la même tâche : réussi en 12 s (3 tests corrects, branche abandonnée car doublon). Le délai précédent n'était pas reproductible. Dans `--verify`, écrire `.venv\Scripts\python.exe` avec des barres obliques inverses (la commande tourne dans cmd.exe).
+- 2026-11-24 : graphique du patrimoine (`9249450`) en bas à gauche pendant la partie et dans le miroir : composition empilée, points de décision, traits d'événements par famille, ligne du montant de départ, infobulle par année. Pas encore vu avec la nouvelle API (relancer uvicorn avec `--reload`).
+
 <!-- delegation-kit:start -->
 ## Delegation setup for this project (jeu-1m, "Et si… ?")
 
