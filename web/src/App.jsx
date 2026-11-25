@@ -424,8 +424,8 @@ function Year({ v, level, busy, error, retryError, onRetry, onPlay, onNew }) {
       </section>
       <section className="card chart-card">
         <h3>Votre patrimoine au fil des années <span className="muted small">(en pouvoir d'achat)</span></h3>
-        <Chart points={v.history} start={v.prize_local / c.ppp} height={240} />
-        {level === 'avance' && <Economy points={v.history} />}
+        <Chart points={v.history} start={v.prize_local / c.ppp} height={230} W={420} />
+        {level === 'avance' && <Economy points={v.history} W={420} />}
       </section>
       </div>
 
@@ -666,9 +666,9 @@ function Actions({ v, add, full }) {
 // Composantes positives empilées sous la courbe du patrimoine net (la dette n'est pas empilée).
 const LAYERS = [['cash', 'Liquidités'], ['etf', 'ETF'], ['property', 'Immobilier net'], ['business', 'Entreprise']]
 
-function Chart({ points, start, height = 220 }) {
+function Chart({ points, start, height = 220, W = 600 }) {
   if (points.length < 2) return <p className="muted small">Le graphique apparaîtra après la première année.</p>
-  const W = 600, H = height, P = 40
+  const H = height, P = 40
   const xs = points.map((p) => p.age)
   const tops = points.map((p) => LAYERS.reduce((s, [k]) => s + Math.max(p[k] ?? 0, 0), 0))
   const ys = points.map((p) => p.net_worth_ppp)
@@ -725,49 +725,67 @@ function Chart({ points, start, height = 220 }) {
   )
 }
 
-// Séries de l'année rejouée, chocs d'événements compris (ce que la vie a réellement subi).
+// Facteurs de l'économie : la vraie année passée rejouée, chocs d'événements compris.
 const ECONOMY = [
-  ['Bourse locale (réel)', (e) => e.economy.stocks_real, () => 0],
-  ['Inflation', (e) => e.economy.inflation + e.shocks.inflation_add, (e) => e.shocks.inflation_add],
-  ['Épargne (taux réel)', (e) => e.economy.cash_real + e.shocks.rate_add, (e) => e.shocks.rate_add],
-  ['Prix du dollar US (réel)', (e) => e.economy.fx_real + e.shocks.fx_add, (e) => e.shocks.fx_add],
-  ['Immobilier (réel)', (e) => e.economy.home_real + e.shocks.home_add, (e) => e.shocks.home_add],
+  ['Bourse', "ce qu'a rapporté l'ETF, après inflation", (e) => e.economy.stocks_real, () => 0],
+  ['Inflation', 'la hausse des prix', (e) => e.economy.inflation + e.shocks.inflation_add, (e) => e.shocks.inflation_add],
+  ['Épargne', 'ce que rapportent vos liquidités, après inflation', (e) => e.economy.cash_real + e.shocks.rate_add, (e) => e.shocks.rate_add],
+  ['Dollar US', "s'il monte, voyages et études à l'étranger coûtent plus cher", (e) => e.economy.fx_real + e.shocks.fx_add, (e) => e.shocks.fx_add],
+  ['Immobilier', 'le prix des logements, après inflation', (e) => e.economy.home_real + e.shocks.home_add, (e) => e.shocks.home_add],
 ]
 
+// 1c : la variation du patrimoine, part par part (en pouvoir d'achat).
+const PARTS = [
+  ['decisions', 'Vos décisions'], ['event', 'Événements'], ['stocks', 'Bourse (ETF)'],
+  ['property', 'Immobilier'], ['savings', 'Intérêts de l\'épargne'], ['rest', 'Revenus, dépenses et le reste'],
+]
+const signed = (x) => (x > 0 ? '+' : x < 0 ? '−' : '') + money(Math.abs(x), 'USD')
+
 // Petits graphiques en barres, alignés sur l'âge comme le graphique du patrimoine (même W et P).
-function Economy({ points }) {
-  const pts = points.filter((p) => p.economy) // shortcut: une API pas encore relancée n'envoie pas ces séries
-  if (pts.length < 2) return null
-  const W = 600, H = 70, P = 40
-  const [x0, x1] = [pts[0].age, pts[pts.length - 1].age]
+function Economy({ points, W = 600 }) {
+  const pts = points.filter((p) => p.economy && p.breakdown) // shortcut: une API pas encore relancée n'envoie pas ces séries
+  if (!pts.length) return null
+  const H = 46, P = 40
+  const last = pts[pts.length - 1]
+  const total = Object.fromEntries(PARTS.map(([k]) => [k, pts.reduce((s, p) => s + p.breakdown[k], 0)]))
+  const sum = (b) => PARTS.reduce((s, [k]) => s + b[k], 0)
+  const [x0, x1] = [pts[0].age, last.age]
   const X = (x) => P + ((x - x0) / Math.max(x1 - x0, 1)) * (W - 2 * P)
-  const step = (W - 2 * P) / Math.max(x1 - x0, 1)
+  const step = Math.min((W - 2 * P) / Math.max(x1 - x0, 1), 40)
+  const tone = (x) => (Math.abs(x) < 0.5 ? 'muted' : x > 0 ? 'up' : 'down')
   return (
     <details className="economy" open>
-      <summary>Économie de votre vie</summary>
-      <p className="muted small">L'année historique rejouée chaque année, avec les chocs des événements. Variation annuelle.</p>
-      {ECONOMY.map(([label, get, shock]) => {
+      <summary>L'économie de votre vie</summary>
+      <h4>Ce qui a fait bouger votre patrimoine</h4>
+      <table className="parts small">
+        <thead><tr><th /><th>À {last.age} ans</th><th>Depuis le début</th></tr></thead>
+        <tbody>
+          {PARTS.filter(([k]) => Math.abs(total[k]) >= 0.5).map(([k, l]) => (
+            <tr key={k}><th>{l}</th><td className={tone(last.breakdown[k])}>{signed(last.breakdown[k])}</td><td className={tone(total[k])}>{signed(total[k])}</td></tr>
+          ))}
+        </tbody>
+        <tfoot><tr><th>Variation du patrimoine</th><td className={tone(sum(last.breakdown))}>{signed(sum(last.breakdown))}</td><td className={tone(sum(total))}>{signed(sum(total))}</td></tr></tfoot>
+      </table>
+      <h4>L'économie, année après année</h4>
+      <p className="muted small">Chaque année de jeu rejoue une vraie année passée de votre pays. Survolez une barre pour savoir laquelle.</p>
+      {ECONOMY.map(([label, help, get, shock]) => {
         const vals = pts.map(get)
         const m = Math.max(...vals.map(Math.abs), 0.01)
-        const Y = (v) => H / 2 - (v / m) * (H / 2 - 4)
+        const Y = (v) => H / 2 - (v / m) * (H / 2 - 2)
         return (
           <figure key={label} className="mini">
-            <figcaption className="small">{label} <span className="muted">· de {pct(Math.min(...vals))} à {pct(Math.max(...vals))}</span></figcaption>
+            <figcaption className="small"><strong>{label}</strong> : {help}. <span className="muted">À {last.age} ans : {pct(vals[vals.length - 1])}</span></figcaption>
             <svg className="chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${label}, année par année`}>
-              {pts.map((p, i) => p.family && <line key={'e' + i} x1={X(p.age)} x2={X(p.age)} y1={0} y2={H} className={`event-mark ${p.family}`} />)}
               <line x1={P} x2={W - P} y1={H / 2} y2={H / 2} className="grid-line" />
               {pts.map((p, i) => (
-                <rect key={i} x={X(p.age) - step * 0.35} width={step * 0.7} y={Math.min(Y(vals[i]), H / 2)} height={Math.abs(Y(vals[i]) - H / 2)}
-                  className={vals[i] >= 0 ? 'bar up' : 'bar down'} />
+                <rect key={i} x={X(p.age) - step * 0.35} width={step * 0.7} y={Math.min(Y(vals[i]), H / 2)} height={Math.max(Math.abs(Y(vals[i]) - H / 2), 1)} className="bar" />
               ))}
               {pts.map((p, i) => (
                 <rect key={'h' + i} x={X(p.age) - step / 2} y={0} width={step} height={H} className="hit">
-                  <title>{`${p.age} ans · ${pct(vals[i])} (comme en ${p.market_year})`
-                    + (shock(p) ? `\ndont choc d'événement : ${pct(shock(p))}` : '') + (p.event ? `\n${p.event}` : '')}</title>
+                  <title>{`${p.age} ans : ${pct(vals[i])} (comme en ${p.market_year})`
+                    + (shock(p) ? `\ndont ${pct(shock(p))} dû à un événement` : '')}</title>
                 </rect>
               ))}
-              <text x={4} y={12} className="tick">{pct(m)}</text>
-              <text x={4} y={H - 2} className="tick">{pct(-m)}</text>
             </svg>
           </figure>
         )

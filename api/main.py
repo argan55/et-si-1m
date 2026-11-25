@@ -79,6 +79,7 @@ def view(s):
                      "event": EVENT_BY_ID[y["event"]]["text"] if y["event"] else None,
                      "family": EVENT_BY_ID[y["event"]]["family"] if y["event"] else None,
                      "economy": y["economy"], "shocks": y["shocks"], "market_year": y["market_year"],
+                     "breakdown": {k: v / c["ppp_per_intl_usd"] for k, v in y["breakdown"].items()},
                      **{k: y[k] / c["ppp_per_intl_usd"] for k in ("cash", "etf", "property", "business", "debt")}}
                     for y in s["history"]],
         "mirror": mirror(s) if s["done"] else None,

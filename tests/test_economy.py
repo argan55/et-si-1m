@@ -24,6 +24,19 @@ def test_same_seed_same_wealth(key):
     assert (h[-1], sum(h)) == pytest.approx(GOLDEN[key], abs=0.01)  # valeurs arrondies au centime
 
 
+@pytest.mark.parametrize("country", ["BR", "CA", "HK"])
+def test_breakdown_adds_up(country):
+    """1c : la somme des parts (décisions, événement, bourse, immobilier, épargne, reste) = variation du patrimoine."""
+    from engine import new_life
+    from engine.game import net_worth
+    s, _ = bot_turns(4, country)
+    prev = net_worth(new_life(4, country))
+    for y in s["history"]:
+        assert sum(y["breakdown"].values()) == pytest.approx(y["net_worth"] - prev, abs=1e-3)
+        assert set(y["breakdown"]) == {"decisions", "event", "stocks", "property", "savings", "rest"}
+        prev = y["net_worth"]
+
+
 def test_economy_in_history_and_api():
     s, turns = bot_turns(1, "BR")
     y = s["history"][0]

@@ -109,11 +109,18 @@ input, select { font: inherit; padding: 8px; border-radius: 8px; border: 1px sol
 .chart .line { stroke-width: 3.5; filter: drop-shadow(0 1px 2px color-mix(in srgb, var(--accent) 50%, transparent)); }
 .chart .grid-line { stroke: var(--line); stroke-width: 1; }
 .economy { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 8px; }
-.economy summary { cursor: pointer; font-weight: 600; }
+.economy summary { cursor: pointer; font-weight: 600; font-size: 1.05rem; }
+.economy h4 { margin: 14px 0 6px; font-size: 0.95rem; }
+.parts { width: 100%; border-collapse: collapse; }
+.parts th, .parts td { padding: 3px 0; text-align: right; font-weight: 400; }
+.parts th:first-child { text-align: left; color: var(--muted); }
+.parts thead th { color: var(--muted); font-size: 0.8rem; }
+.parts tfoot th, .parts tfoot td { border-top: 1px solid var(--line); font-weight: 600; padding-top: 6px; }
+.parts .up { color: var(--accent); }
+.parts .down { color: var(--warn); }
 .economy .mini { margin: 8px 0 0; }
 .economy .mini .chart { margin: 2px 0; }
-.chart .bar.up { fill: var(--accent); }
-.chart .bar.down { fill: var(--warn); }
+.chart .bar { fill: var(--marches); }
 .chart .start-line { stroke: var(--ink); stroke-width: 1.5; stroke-dasharray: 6 4; opacity: 0.7; }
 .chart .event-mark { stroke-width: 1.5; stroke-dasharray: 2 3; opacity: 0.8; }
 .chart .event-mark.marches { stroke: var(--marches); }
@@ -122,7 +129,7 @@ input, select { font: inherit; padding: 8px; border-radius: 8px; border: 1px sol
 .chart .event-mark.entourage { stroke: var(--entourage); }
 .legend i.start-line { height: 0; border-top: 2px dashed var(--ink); border-radius: 0; opacity: 0.7; }
 .legend i.event-mark { width: 0; height: 12px; border-left: 2px dotted var(--muted); border-radius: 0; }
-.chart .tick { font-size: 13px; }
+.chart .tick { font-size: 14px; }
 .chart .hit { fill: transparent; }
 .chart .hit:hover { fill: color-mix(in srgb, var(--ink) 6%, transparent); }
 .chart .decision, .legend i.decision { fill: var(--accent); stroke: var(--card); stroke-width: 1.5; }

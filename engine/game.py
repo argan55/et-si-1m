@@ -401,6 +401,7 @@ def _finances(s, yr, c):
     inc = income(s) * yr["income_mult"]
     spend = spending(s)
     flow = inc - spend
+    homes0 = sum(h["value"] for h in s["homes"])
     for h in s["homes"]:
         flow -= h["value"] * c["home_costs"]
         if h["use"] == "rental":
@@ -415,10 +416,13 @@ def _finances(s, yr, c):
         s["debt_years"] = max(1, s["debt_years"] - 1)
         flow -= pay
 
+    gains = {"property": sum(h["value"] for h in s["homes"]) - homes0}
+    cash0, etf0 = s["cash"], s["etf"]
     if s["cash"] > 0:
         # rendement réel historique de l'épargne, corrigé des chocs de taux et d'inflation de l'année
         s["cash"] *= (1 + m["cash_real"] + yr["rate_add"]) * (1 + m["inflation"]) / (1 + infl)
     s["etf"] *= 1 + m["stocks_real"]
+    gains["savings"], gains["stocks"] = s["cash"] - cash0, s["etf"] - etf0
     s["fx"] *= 1 + m["fx_real"] + yr["fx_add"]
     s["cash"] += flow
 
@@ -443,7 +447,8 @@ def _finances(s, yr, c):
             "income": inc, "spend": spend,
             # année historique rejouée (avant chocs) et chocs d'événements de l'année, pour l'affichage
             "economy": {k: m[k] for k in ("stocks_real", "inflation", "cash_real", "fx_real", "home_real")},
-            "shocks": {k: yr[k] for k in ("rate_add", "inflation_add", "fx_add", "home_add")}}
+            "shocks": {k: yr[k] for k in ("rate_add", "inflation_add", "fx_add", "home_add")},
+            "gains": gains}
 
 
 def step(s, actions=(), choice=None):
@@ -464,6 +469,7 @@ def _step(s, actions, choice):
     yr = {"income_mult": 1.0, "rent_mult": 1.0, "inflation_add": 0.0, "rate_add": 0.0,
           "fx_add": 0.0, "home_add": 0.0, "market": None}
     s["log"] = []
+    nw0 = net_worth(s)  # pour la décomposition de la variation du patrimoine (affichage seulement)
     if s["pending"]:
         opts = EVENT_BY_ID[s["pending"]]["choices"]
         if choice is None or not 0 <= int(choice) < len(opts):
@@ -478,14 +484,18 @@ def _step(s, actions, choice):
     for a in actions:
         _act(s, a, c)
 
+    nw1 = net_worth(s)
     ev = _draw_event(s)
     if ev and "choices" in ev:
         s["pending"] = ev["id"]
     elif ev:
         apply_effects(s, ev.get("effects_by_country", {}).get(s["country"], ev["effects"]), yr)
 
+    nw2 = net_worth(s)
     fin = _finances(s, yr, c)
     nw = net_worth(s)
+    g = fin.pop("gains")
+    fin["breakdown"] = {"decisions": nw1 - nw0, "event": nw2 - nw1, **g, "rest": nw - nw2 - sum(g.values())}
     rentals = sum(h["value"] - h["mortgage"] for h in s["homes"] if h["use"] == "rental")
     biz = s["business"]["value"] if s["business"] else 0.0
     s["history"].append({
