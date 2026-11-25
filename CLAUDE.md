@@ -161,6 +161,7 @@ _À mettre à jour à la fin de chaque étape._
 - 2026-11-24 : **`avance-economie` fusionnée dans `main`** (sans commit de fusion), README à jour avec les deux niveaux (`4e6b009`). `main`, `avance-economie` et le tag `v1-decouverte` sont poussés sur GitHub. 68 tests pytest passent.
   - Prochaine étape : étape 3b, publication sur Render (Blueprint créé par l'utilisateur, variables `ALLOWED_ORIGINS` et `VITE_API_URL`), puis tester la démo en ligne dans les deux niveaux et mettre le lien dans le README.
   - Ensuite, niveau Avancé : point 1 de « Plus tard » dans la note vault (partie plus longue), à cadrer.
+- 2026-11-24, branche `avance-economie` : **partie plus riche en Avancé** (piste choisie : plus de choix par an). 3 décisions par an au lieu de 2 (`max_actions_avance`) et un onglet « Répartition » : part cible en ETF, rééquilibrée automatiquement chaque année (`_rebalance`, seuil `rebalance_min_share` = 2 %). Le niveau est envoyé à l'API (`level`) ; en Découverte, la limite reste 2 et la répartition est refusée par le moteur. 2 nouvelles clés dans `data/rules.json` (avec leur source). 76 tests pytest ; vérifié dans le navigateur (0/3 en Avancé, 0/2 et pas d'onglet en Découverte, rééquilibrage visible dans le journal). Pas encore fusionné dans `main`.
 
 <!-- delegation-kit:start -->
 ## Delegation setup for this project (jeu-1m, "Et si… ?")

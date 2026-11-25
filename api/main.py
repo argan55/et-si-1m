@@ -3,11 +3,13 @@ import os
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from engine import mirror, replay
 from engine.data import COUNTRIES, EVENT_BY_ID, RULES
-from engine.game import PROFILE_LIMITS, available, emergency_fund, net_worth, retired, spending, usd, working
+from engine.game import PROFILE_LIMITS, available, max_actions, emergency_fund, net_worth, retired, spending, usd, working
 
 app = FastAPI(title="Et si… ? (1 M$, une vie)")
 
@@ -18,7 +20,7 @@ if _origins:
 
 
 class Turn(BaseModel):
-    actions: list[dict] = Field(default=[], max_length=RULES["max_actions"])
+    actions: list[dict] = Field(default=[], max_length=RULES["max_actions_avance"])  # limite exacte selon le niveau : moteur
     choice: int | None = None
 
 
@@ -38,6 +40,7 @@ class Play(BaseModel):
     country: str | None = None
     profile: Profile | None = None
     turns: list[Turn] = Field(default=[], max_length=RULES["max_age"])
+    level: Literal["decouverte", "avance"] = "decouverte"
 
 
 def _event(eid):
@@ -67,6 +70,7 @@ def view(s):
         "prize_usd": RULES["prize_usd"],
         "prize_local": s["profile"]["amount"] if s["profile"] else RULES["prize_usd"] * c["fx_per_usd"],
         "age": s["age"], "start_age": s["start_age"], "done": s["done"],
+        "level": s["level"], "max_actions": max_actions(s), "target": s["target"],
         "working": working(s), "salary": s["salary"], "lifestyle": s["lifestyle"],
         "partner": s["partner"], "children": s["children"],
         "cash": s["cash"], "etf": s["etf"], "debt": s["debt"], "homes": s["homes"],
@@ -101,7 +105,7 @@ def play(p: Play):
     if p.country is not None and p.country not in COUNTRIES:
         raise HTTPException(400, "Pays inconnu.")
     try:
-        s = replay(p.seed, [t.model_dump() for t in p.turns], p.country, p.profile.model_dump() if p.profile else None)
+        s = replay(p.seed, [t.model_dump() for t in p.turns], p.country, p.profile.model_dump() if p.profile else None, p.level)
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
     return view(s)

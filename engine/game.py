@@ -82,6 +82,7 @@ def new_life(seed, country=None, profile=None):
         "fx": 1.0,  # indice réel du dollar US en monnaie locale (1 = au départ)
         "spend_mult": 1.0,  # train de vie réduit après une faillite personnelle
         "business": None, "studying": 0, "studied": False,
+        "level": "decouverte", "target": None,  # niveau Avancé : part cible en ETF, rééquilibrée chaque année
         "pending": None, "done": False, "log": [],
         "stats": {"travel_spent": 0.0, "experience": 0.0, "trips": 0, "trips_abroad": 0, "given": 0.0, "refunded": 0.0, "gifts": 0,
                   "invested": 0.0, "repaid": 0.0, "bankruptcies": 0, **{k: 0 for k in COUNTERS}},
@@ -158,7 +159,20 @@ def _spend(s, amount):
 def _act(s, a, c):
     t = a.get("type")
     st = s["stats"]
-    if t == "invest":
+    if t == "rebalance":
+        if s["level"] != "avance":
+            raise ValueError("La répartition automatique est réservée au niveau Avancé.")
+        share = a.get("etf_share")
+        if share is None:
+            s["target"] = None
+            s["log"].append("Répartition automatique arrêtée.")
+        else:
+            share = float(share)
+            if not (math.isfinite(share) and 0 <= share <= 1):
+                raise ValueError("Part en ETF invalide (entre 0 et 1).")
+            s["target"] = share
+            s["log"].append(f"Répartition cible : {round(share * 100)} % en ETF, le reste en liquidités.")
+    elif t == "invest":
         amt = float(a["amount"])
         if not math.isfinite(amt) or amt == 0:
             raise ValueError("Montant invalide.")
@@ -462,6 +476,26 @@ def step(s, actions=(), choice=None):
         raise
 
 
+def max_actions(s):
+    return RULES["max_actions_avance"] if s["level"] == "avance" else RULES["max_actions"]
+
+
+def _rebalance(s, c):
+    """Niveau Avancé : ramène la part en ETF (sur ETF + liquidités hors fonds d'urgence) vers la cible."""
+    if s["target"] is None:
+        return
+    free = max(available(s), 0.0)
+    total = free + s["etf"]
+    d = min(s["target"] * total - s["etf"], free)
+    if total <= 0 or abs(d) < RULES["rebalance_min_share"] * total:
+        return
+    s["cash"] -= d
+    s["etf"] += d
+    if d > 0:
+        s["stats"]["invested"] += d
+    s["log"].append(f"Rééquilibrage : {'achat' if d > 0 else 'vente'} d'ETF pour {_money(abs(d), c)}")
+
+
 def _step(s, actions, choice):
     if s["done"]:
         raise ValueError("Cette vie est terminée.")
@@ -479,10 +513,11 @@ def _step(s, actions, choice):
         s["pending"] = None
     elif choice is not None:
         raise ValueError("Aucun choix n'est attendu.")
-    if len(actions) > RULES["max_actions"]:
-        raise ValueError(f"Au plus {RULES['max_actions']} décisions par an.")
+    if len(actions) > max_actions(s):
+        raise ValueError(f"Au plus {max_actions(s)} décisions par an.")
     for a in actions:
         _act(s, a, c)
+    _rebalance(s, c)
 
     nw1 = net_worth(s)
     ev = _draw_event(s)
@@ -512,10 +547,13 @@ def _step(s, actions, choice):
     return s
 
 
-def replay(seed, turns, country=None, profile=None):
+def replay(seed, turns, country=None, profile=None, level="decouverte"):
     """Rejoue une vie à partir de sa graine (et de son profil en mode réaliste) et de ses décisions."""
+    if level not in ("decouverte", "avance"):
+        raise ValueError("Niveau inconnu.")
     try:
         s = new_life(seed, country, profile)
+        s["level"] = level
     except (KeyError, TypeError) as e:
         raise ValueError(f"Profil invalide : {e}") from e
     for t in turns:

@@ -3,7 +3,6 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 const params = new URLSearchParams(location.search)
 // En production (site statique), l'adresse de l'API vient de VITE_API_URL ; en local, le proxy Vite s'en charge.
 const API = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
-const MAX_ACTIONS = 2
 const FAMILY = { marches: 'Marchés', travail: 'Travail', perso: 'Vie perso', entourage: 'Entourage' }
 
 // Durée avant d'afficher le message de réveil (ms) et timeout max (ms)
@@ -80,7 +79,7 @@ export default function App() {
   const ready = mode === 'jeu' || (mode === 'realiste' && profile)
 
   // Hook pour appeler l'API avec gestion du message de réveil et timeout 90s
-  const callPlayWithWake = useCallback(async (seed, country, turns, profile) => {
+  const callPlayWithWake = useCallback(async (seed, country, turns, profile, level) => {
     let wakeTimer = null
     let abortTimer = null
     const controller = new AbortController()
@@ -97,7 +96,7 @@ export default function App() {
       const r = await fetch(`${API}/api/play`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ seed, country, turns, profile }),
+        body: JSON.stringify({ seed, country, turns, profile, level }),
         signal: controller.signal,
       })
       // Seule une réponse 4xx est une vraie erreur de l'API (e.api) ; le reste (5xx, réseau, délai) se réessaie.
@@ -122,13 +121,13 @@ export default function App() {
     setError('')
     setRetryError(null)
     const fail = (e) => (e.api ? setError(e.message) : setRetryError({ message: e.message }))
-    callPlayWithWake(seed, country, t, profile).then(setView, (e) => {
+    callPlayWithWake(seed, country, t, profile, level).then(setView, (e) => {
       if (!e.api || !t.length) return fail(e)
       // sauvegarde illisible (données du jeu modifiées depuis) : on repart du début de cette vie
       setError(`Partie sauvegardée impossible à reprendre (${e.message}). Elle recommence au début.`)
       setTurns([])
       setStarted(false)
-      callPlayWithWake(seed, country, [], profile).then(setView, fail)
+      callPlayWithWake(seed, country, [], profile, level).then(setView, fail)
     })
   }
 
@@ -187,7 +186,7 @@ export default function App() {
       let v = view
       for (; i < years && !v.done && (i === 0 || !v.pending); i++) {
         const next = [...t, i === 0 ? first : { actions: [] }]
-        v = await callPlayWithWake(seed, country, next, profile)
+        v = await callPlayWithWake(seed, country, next, profile, level)
         t = next
         setView(v)
         setTurns(t)
@@ -240,7 +239,7 @@ function Landing({ level, onLevel, onGame, onReal }) {
       <p className="eyebrow step">1. Niveau</p>
       <div className="level" role="radiogroup" aria-label="Niveau">
         {[['decouverte', 'Découverte', 'Le jeu simple : vos décisions et votre patrimoine.'],
-          ['avance', 'Avancé', "En plus : l'économie de votre vie (bourse, inflation, taux, change, immobilier)."]].map(([k, l, d]) => (
+          ['avance', 'Avancé', "En plus : 3 décisions par an, une répartition automatique de votre argent et l'économie de votre vie."]].map(([k, l, d]) => (
           <button key={k} role="radio" aria-checked={level === k} className={level === k ? 'selected' : ''} onClick={() => onLevel(k)}>
             <strong>{l}</strong> <span className="muted small">{d}</span>
           </button>
@@ -389,7 +388,7 @@ function Year({ v, level, busy, error, retryError, onRetry, onPlay, onNew }) {
   const c = v.country
   const [draft, setDraft] = useState([])
   const [choice, setChoice] = useState(null)
-  const full = draft.length >= MAX_ACTIONS
+  const full = draft.length >= v.max_actions
   const add = (a, label) => !full && setDraft([...draft, { ...a, label }])
   const play = (years) => {
     const t = { actions: draft.map(({ label, ...a }) => a), choice }
@@ -460,7 +459,7 @@ function Year({ v, level, busy, error, retryError, onRetry, onPlay, onNew }) {
           </div>
         )}
 
-        <h3>Vos décisions cette année <span className="muted">({draft.length}/{MAX_ACTIONS})</span></h3>
+        <h3>Vos décisions cette année <span className="muted">({draft.length}/{v.max_actions})</span></h3>
         <p className="muted">Disponible (hors fonds d'urgence) : {money(Math.max(v.available, 0), c.currency)}</p>
         <Actions v={v} add={add} full={full} />
         {draft.length > 0 && (
@@ -516,7 +515,7 @@ function AmountPicker({ label, base, shortcuts = [0.25, 0.5, 1], full, allowNega
 
 const TABS = [
   ['invest', 'Investir (ETF)'], ['home', 'Immobilier'], ['travel', 'Voyager'], ['debt', 'Dettes'],
-  ['study', 'Étudier'], ['business', 'Entreprendre'], ['give', 'Donner'],
+  ['study', 'Étudier'], ['business', 'Entreprendre'], ['give', 'Donner'], ['rebalance', 'Répartition'],
 ]
 
 function Actions({ v, add, full }) {
@@ -534,7 +533,7 @@ function Actions({ v, add, full }) {
   return (
     <div className="actions">
       <div className="tabs" role="tablist">
-        {TABS.map(([k, l]) => (
+        {TABS.filter(([k]) => k !== 'rebalance' || v.level === 'avance').map(([k, l]) => (
           <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'selected' : ''} onClick={() => setTab(k)}>{l}</button>
         ))}
       </div>
@@ -652,6 +651,7 @@ function Actions({ v, add, full }) {
           )}
         </div>
       )}
+      {tab === 'rebalance' && <Rebalance v={v} add={add} full={full} />}
       {tab === 'give' && (
         <div className="panel">
           <p className="muted">À une cause, à des proches. Vous avez donné {money(v.given ?? 0, cur)} jusqu'ici.</p>
@@ -659,6 +659,31 @@ function Actions({ v, add, full }) {
             onAdd={(n) => add({ type: 'give', amount: n }, `Donner ${money(n, cur)}`)} />
         </div>
       )}
+    </div>
+  )
+}
+
+// Niveau Avancé : une part cible en ETF, rééquilibrée automatiquement chaque année.
+function Rebalance({ v, add, full }) {
+  const [share, setShare] = useState(Math.round((v.target ?? 0.6) * 100))
+  const cur = v.country.currency
+  const total = Math.max(v.available, 0) + v.etf
+  return (
+    <div className="panel">
+      <p className="muted">
+        Choisissez la part de votre argent placée en ETF ; le reste est gardé en liquidités (le fonds d'urgence n'est pas compté).
+        Chaque année, achats ou ventes ramènent automatiquement la répartition vers votre cible.
+      </p>
+      <p>{v.target == null ? 'Aucune répartition automatique pour l\'instant.' : `Cible actuelle : ${Math.round(v.target * 100)} % en ETF.`}
+        {' '}<span className="muted">Aujourd'hui : {total > 0 ? Math.round((v.etf / total) * 100) : 0} % en ETF.</span></p>
+      <label>
+        Part en ETF : {share} % · soit {money(total * share / 100, cur)} en ETF et {money(total * (100 - share) / 100, cur)} en liquidités
+        <input type="range" min="0" max="100" step="10" value={share} onChange={(e) => setShare(Number(e.target.value))} />
+      </label>
+      <div className="row">
+        <button disabled={full} onClick={() => add({ type: 'rebalance', etf_share: share / 100 }, `Répartition : ${share} % en ETF`)}>Appliquer chaque année</button>
+        {v.target != null && <button disabled={full} onClick={() => add({ type: 'rebalance', etf_share: null }, 'Arrêter la répartition automatique')}>Arrêter</button>}
+      </div>
     </div>
   )
 }
