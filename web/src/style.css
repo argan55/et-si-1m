@@ -108,6 +108,12 @@ input, select { font: inherit; padding: 8px; border-radius: 8px; border: 1px sol
 .chart-card h3 { margin: 0 0 4px; }
 .chart .line { stroke-width: 3.5; filter: drop-shadow(0 1px 2px color-mix(in srgb, var(--accent) 50%, transparent)); }
 .chart .grid-line { stroke: var(--line); stroke-width: 1; }
+.economy { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 8px; }
+.economy summary { cursor: pointer; font-weight: 600; }
+.economy .mini { margin: 8px 0 0; }
+.economy .mini .chart { margin: 2px 0; }
+.chart .bar.up { fill: var(--accent); }
+.chart .bar.down { fill: var(--warn); }
 .chart .start-line { stroke: var(--ink); stroke-width: 1.5; stroke-dasharray: 6 4; opacity: 0.7; }
 .chart .event-mark { stroke-width: 1.5; stroke-dasharray: 2 3; opacity: 0.8; }
 .chart .event-mark.marches { stroke: var(--marches); }

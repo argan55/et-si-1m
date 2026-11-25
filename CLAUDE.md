@@ -155,6 +155,7 @@ _À mettre à jour à la fin de chaque étape._
 - 2026-11-24 : tests de `_amount` (`tests/test_amount.py`, 3 tests). Délégation Cline en échec (`cline_timeout`, aucun fichier écrit, branche abandonnée), tests écrits par Claude. 46 tests pytest passent. `tests/test_amortize.py` reste non commité.
 - 2026-11-24 : nouvel essai Cline sur la même tâche : réussi en 12 s (3 tests corrects, branche abandonnée car doublon). Le délai précédent n'était pas reproductible. Dans `--verify`, écrire `.venv\Scripts\python.exe` avec des barres obliques inverses (la commande tourne dans cmd.exe).
 - 2026-11-24 : graphique du patrimoine (`9249450`) en bas à gauche pendant la partie et dans le miroir : composition empilée, points de décision, traits d'événements par famille, ligne du montant de départ, infobulle par année. Pas encore vu avec la nouvelle API (relancer uvicorn avec `--reload`).
+- 2026-11-24, branche `avance-economie` (version avancée, morceau 1, voir la note vault) : 1a (`ad8c677`) expose par année l'économie rejouée (`economy`) et les chocs (`shocks`) dans `history` et l'API, test des patrimoines de référence par graine (65 tests) ; 1b panneau « Économie de votre vie » replié par défaut sous le graphique du patrimoine (5 petits graphiques en barres alignés sur l'âge, événements, infobulles), vérifié dans le navigateur. Prochaine étape : 1c (décomposition de la variation du patrimoine).
 
 <!-- delegation-kit:start -->
 ## Delegation setup for this project (jeu-1m, "Et si… ?")

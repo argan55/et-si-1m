@@ -410,6 +410,7 @@ function Year({ v, busy, error, retryError, onRetry, onPlay, onNew }) {
       <section className="card chart-card">
         <h3>Votre patrimoine au fil des années <span className="muted small">(en pouvoir d'achat)</span></h3>
         <Chart points={v.history} start={v.prize_local / c.ppp} height={240} />
+        <Economy points={v.history} />
       </section>
       </div>
 
@@ -709,6 +710,57 @@ function Chart({ points, start, height = 220 }) {
   )
 }
 
+// Séries de l'année rejouée, chocs d'événements compris (ce que la vie a réellement subi).
+const ECONOMY = [
+  ['Bourse locale (réel)', (e) => e.economy.stocks_real, () => 0],
+  ['Inflation', (e) => e.economy.inflation + e.shocks.inflation_add, (e) => e.shocks.inflation_add],
+  ['Épargne (taux réel)', (e) => e.economy.cash_real + e.shocks.rate_add, (e) => e.shocks.rate_add],
+  ['Prix du dollar US (réel)', (e) => e.economy.fx_real + e.shocks.fx_add, (e) => e.shocks.fx_add],
+  ['Immobilier (réel)', (e) => e.economy.home_real + e.shocks.home_add, (e) => e.shocks.home_add],
+]
+
+// Petits graphiques en barres, alignés sur l'âge comme le graphique du patrimoine (même W et P).
+function Economy({ points }) {
+  const pts = points.filter((p) => p.economy) // shortcut: une API pas encore relancée n'envoie pas ces séries
+  if (pts.length < 2) return null
+  const W = 600, H = 70, P = 40
+  const [x0, x1] = [pts[0].age, pts[pts.length - 1].age]
+  const X = (x) => P + ((x - x0) / Math.max(x1 - x0, 1)) * (W - 2 * P)
+  const step = (W - 2 * P) / Math.max(x1 - x0, 1)
+  return (
+    <details className="economy">
+      <summary>Économie de votre vie</summary>
+      <p className="muted small">L'année historique rejouée chaque année, avec les chocs des événements. Variation annuelle.</p>
+      {ECONOMY.map(([label, get, shock]) => {
+        const vals = pts.map(get)
+        const m = Math.max(...vals.map(Math.abs), 0.01)
+        const Y = (v) => H / 2 - (v / m) * (H / 2 - 4)
+        return (
+          <figure key={label} className="mini">
+            <figcaption className="small">{label} <span className="muted">· de {pct(Math.min(...vals))} à {pct(Math.max(...vals))}</span></figcaption>
+            <svg className="chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${label}, année par année`}>
+              {pts.map((p, i) => p.family && <line key={'e' + i} x1={X(p.age)} x2={X(p.age)} y1={0} y2={H} className={`event-mark ${p.family}`} />)}
+              <line x1={P} x2={W - P} y1={H / 2} y2={H / 2} className="grid-line" />
+              {pts.map((p, i) => (
+                <rect key={i} x={X(p.age) - step * 0.35} width={step * 0.7} y={Math.min(Y(vals[i]), H / 2)} height={Math.abs(Y(vals[i]) - H / 2)}
+                  className={vals[i] >= 0 ? 'bar up' : 'bar down'} />
+              ))}
+              {pts.map((p, i) => (
+                <rect key={'h' + i} x={X(p.age) - step / 2} y={0} width={step} height={H} className="hit">
+                  <title>{`${p.age} ans · ${pct(vals[i])} (comme en ${p.market_year})`
+                    + (shock(p) ? `\ndont choc d'événement : ${pct(shock(p))}` : '') + (p.event ? `\n${p.event}` : '')}</title>
+                </rect>
+              ))}
+              <text x={4} y={12} className="tick">{pct(m)}</text>
+              <text x={4} y={H - 2} className="tick">{pct(-m)}</text>
+            </svg>
+          </figure>
+        )
+      })}
+    </details>
+  )
+}
+
 // Une phrase neutre par axe : [côté gauche, milieu, côté droit].
 const AXES = [
   ['vivre_batir', 'Vivre', 'Bâtir', [
@@ -753,6 +805,7 @@ function Mirror({ v, onReplay, onNew, seed }) {
       <h2>Votre vie s'achève à {v.age} ans.</h2>
       <p className="muted">Patrimoine net au fil des années, en pouvoir d'achat (dollars US équivalents).</p>
       <Chart points={v.history} start={v.prize_local / c.ppp} />
+      <Economy points={v.history} />
       <dl className="stats">
         <div><dt>Patrimoine laissé</dt><dd>{money(m.final_net_worth_ppp, 'USD')}</dd></div>
         <div><dt>Au plus haut</dt><dd>{money(m.peak_net_worth_ppp, 'USD')}</dd></div>
